@@ -8,10 +8,11 @@
 
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  Avatar,
   Aviso,
   Boton,
   BotonIcono,
@@ -55,9 +56,10 @@ import {
   sumar,
   type Moneda,
 } from '@/nucleo/dinero';
-import { armarDia, formatearDiaCorto, hoy } from '@/nucleo/fechas';
+import { armarDia, formatearDiaCorto, hoy, sumarDias, type Dia } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
+import { agendaDeCobros } from '@/servicios/agenda';
 
 function saludo(): string {
   const hora = new Date().getHours();
@@ -79,6 +81,11 @@ export default function PantallaCartera() {
   const ganancia = useConsulta((db) => cobradoEnPeriodo(db, armarDia(2000, 1, 1), dia), [dia]);
   const perdido = useConsulta((db) => perdidas(db), []);
   const actividad = useConsulta((db) => actividadReciente(db, 5), []);
+  // Lo que vence hasta dentro de 6 días, con lo atrasado incluido.
+  const agenda = useConsulta(
+    (db) => agendaDeCobros(db, { hoy: dia, hasta: sumarDias(dia, 6) }),
+    [dia],
+  );
   const avisos = useConsulta(async (db) => {
     const configuracion = await leerConfiguracion(db);
     return {
@@ -130,10 +137,14 @@ export default function PantallaCartera() {
   });
 
   // El próximo cobro que todavía no venció.
-  const proximo =
-    [...alDia]
-      .filter((p) => p.proximoVencimiento !== null)
-      .sort((a, b) => (a.proximoVencimiento! < b.proximoVencimiento! ? -1 : 1))[0] ?? null;
+  const semana = agenda.datos ?? [];
+  const proximo = semana.find((c) => !c.atrasado) ?? null;
+  const etiquetaFecha = (fecha: Dia) =>
+    fecha < dia ? 'Atrasado' : fecha === dia ? 'Hoy' : formatearDiaCorto(fecha);
+  // Total de la semana por moneda: bolivianos y dólares no se suman.
+  const totalSemana = [...new Set(semana.map((c) => c.monto.moneda))].map((moneda) =>
+    sumar(...semana.filter((c) => c.monto.moneda === moneda).map((c) => c.monto)),
+  );
 
   const movimientos = actividad.datos ?? [];
   const sinNada = prestamos.length === 0 && movimientos.length === 0;
@@ -223,8 +234,8 @@ export default function PantallaCartera() {
               etiqueta="Próximo cobro"
               valor={
                 proximo
-                  ? `${formatearDiaCorto(proximo.proximoVencimiento!)} · ${proximo.cliente}`
-                  : 'Nada pendiente'
+                  ? `${etiquetaFecha(proximo.fecha)} · ${proximo.clienteNombre}`
+                  : 'Nada esta semana'
               }
               onPress={
                 proximo
@@ -244,6 +255,40 @@ export default function PantallaCartera() {
       />
 
       {sinNada ? <Vacio titulo="Todavía no prestaste nada" /> : null}
+
+      {semana.length > 0 ? (
+        <Seccion titulo={`Esta semana · ${totalSemana.map((t) => formatear(t)).join(' · ')}`}>
+          <Tarjeta>
+            {semana.map((cobro) => (
+              <Pressable
+                key={cobro.prestamoId}
+                onPress={() =>
+                  router.push({ pathname: '/prestamo/[id]', params: { id: cobro.prestamoId } })
+                }
+                style={({ pressed }) => [styles.filaAgenda, pressed && { opacity: 0.7 }]}>
+                <Avatar nombre={cobro.clienteNombre} />
+                <View style={styles.flex}>
+                  <Texto numberOfLines={1} style={styles.negrita}>
+                    {cobro.clienteNombre}
+                  </Texto>
+                  <Texto
+                    variante="suave"
+                    color={
+                      cobro.atrasado
+                        ? tema.vencido
+                        : cobro.fecha === dia
+                          ? tema.primarioTinta
+                          : tema.textSecondary
+                    }>
+                    {etiquetaFecha(cobro.fecha)}
+                  </Texto>
+                </View>
+                <Monto valor={cobro.monto} variante="subtitulo" />
+              </Pressable>
+            ))}
+          </Tarjeta>
+        </Seccion>
+      ) : null}
 
       {movimientos.length > 0 ? (
         <Seccion titulo="Actividad reciente">
@@ -366,4 +411,11 @@ const styles = StyleSheet.create({
   },
   pieDestacada: { marginTop: Spacing.two },
   divisor: { alignSelf: 'stretch', width: StyleSheet.hairlineWidth },
+  filaAgenda: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    gap: Spacing.three,
+    paddingVertical: Spacing.two,
+  },
+  negrita: { fontWeight: '600' },
 });
