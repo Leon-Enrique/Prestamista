@@ -26,6 +26,7 @@ import {
   Texto,
   Vacio,
 } from '@/components/ui';
+import { CampoFecha } from '@/components/campo-fecha';
 import { enTransaccion } from '@/datos/base';
 import { listarClientes } from '@/datos/repositorios/clientes';
 import { leerConfiguracion, reglasMoraDe } from '@/datos/repositorios/config';
@@ -50,9 +51,6 @@ import {
 } from '@/nucleo/dinero';
 import {
   ahora,
-  armarDia,
-  dia as validarDia,
-  formatearDia,
   formatearDiaCorto,
   hoy,
   vencimientoDePeriodo,
@@ -86,17 +84,6 @@ const NOMBRE_FRECUENCIA: Record<Frecuencia, string> = {
   mensual: 'meses',
 };
 
-/** `"20/10/2026"` → día, o `null` si no es una fecha que exista. */
-function diaDeTexto(texto: string): Dia | null {
-  const partes = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(texto.trim());
-  if (!partes) return null;
-  try {
-    return validarDia(armarDia(Number(partes[3]), Number(partes[2]), Number(partes[1])));
-  } catch {
-    return null;
-  }
-}
-
 export default function PantallaNuevoPrestamo() {
   const { db, refrescar } = useBase();
   const tema = useTheme();
@@ -116,7 +103,7 @@ export default function PantallaNuevoPrestamo() {
   const [plazoTexto, setPlazoTexto] = useState('6');
   const [capitalConFecha, setCapitalConFecha] = useState(true);
   // La fecha de entrega arranca en hoy; se cambia para cargar préstamos ya entregados.
-  const [entregaTexto, setEntregaTexto] = useState(formatearDia(hoyDia));
+  const [entrega, setEntrega] = useState<Dia>(hoyDia);
   // Por defecto no se cobra penalización: el usuario la activa préstamo por préstamo.
   const [conPenalizacion, setConPenalizacion] = useState(false);
   const [notas, setNotas] = useState('');
@@ -130,14 +117,10 @@ export default function PantallaNuevoPrestamo() {
   // Sin fecha de capital no hay plazo que pedir: la proyección muestra un solo período.
   const plazo = sinFecha ? 1 : Number(plazoTexto);
 
-  const entrega = diaDeTexto(entregaTexto);
-  const entregaFutura = entrega !== null && entrega > hoyDia;
-  const dia = entrega !== null && !entregaFutura ? entrega : hoyDia;
+  const dia = entrega;
 
   const condiciones = useMemo<Condiciones | null>(() => {
     try {
-      if (entrega === null || entregaFutura) return null;
-
       const capital = desdeTexto(capitalTexto, moneda);
       if (!esPositivo(capital)) return null;
 
@@ -170,8 +153,6 @@ export default function PantallaNuevoPrestamo() {
     frecuencia,
     plazo,
     dia,
-    entrega,
-    entregaFutura,
     esAbierto,
     capitalConFecha,
   ]);
@@ -417,17 +398,12 @@ export default function PantallaNuevoPrestamo() {
 
           {masOpciones ? (
             <Seccion titulo="Más opciones">
-              <Campo
-                etiqueta="Fecha de entrega (día/mes/año)"
-                valor={entregaTexto}
-                onChange={setEntregaTexto}
-                error={
-                  entrega === null
-                    ? 'Escribila así: 20/10/2026'
-                    : entregaFutura
-                      ? 'No puede ser una fecha futura.'
-                      : undefined
-                }
+              <CampoFecha
+                etiqueta="Fecha de entrega"
+                valor={entrega}
+                onChange={setEntrega}
+                maximo={hoyDia}
+                hoy={hoyDia}
               />
               <Opciones
                 etiqueta="Penalización por atraso"
