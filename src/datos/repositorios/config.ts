@@ -124,6 +124,11 @@ export function avisoTasaPuntosBasicosDe(config: Configuracion): number | null {
  * Código de país para armar los números de WhatsApp. Bolivia por defecto, porque el país
  * está definido; queda configurable para quien preste a alguien de afuera.
  */
+/** El nombre con el que la app saluda. Se cambia en Ajustes. */
+export function nombreUsuarioDe(config: Configuracion): string {
+  return config.nombre_usuario?.trim() || 'Alejandro';
+}
+
 export function codigoPaisDe(config: Configuracion): string {
   const crudo = config.codigo_pais?.replace(/\D/g, '');
   return crudo && crudo.length > 0 ? crudo : '591';

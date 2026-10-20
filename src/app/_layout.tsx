@@ -1,3 +1,9 @@
+import {
+  PlayfairDisplay_400Regular_Italic,
+  PlayfairDisplay_500Medium,
+  PlayfairDisplay_700Bold,
+  useFonts,
+} from '@expo-google-fonts/playfair-display';
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
@@ -13,12 +19,21 @@ SplashScreen.preventAutoHideAsync();
 
 export default function LayoutRaiz() {
   const esquema = useColorScheme();
+  const [fuentesListas, errorDeFuentes] = useFonts({
+    PlayfairDisplay_400Regular_Italic,
+    PlayfairDisplay_500Medium,
+    PlayfairDisplay_700Bold,
+  });
+  // Si la fuente no carga, la app sigue con la del sistema: no vale la pena trabarse por eso.
+  const listo = fuentesListas || errorDeFuentes !== null;
 
   useEffect(() => {
-    // Se oculta en cuanto React monta; lo que viene después es la apertura de la base, que
-    // tiene su propia pantalla con texto en vez de un splash congelado.
-    void SplashScreen.hideAsync();
-  }, []);
+    // Se oculta en cuanto están las fuentes; lo que viene después es la apertura de la base,
+    // que tiene su propia pantalla con texto en vez de un splash congelado.
+    if (listo) void SplashScreen.hideAsync();
+  }, [listo]);
+
+  if (!listo) return null;
 
   return (
     <ThemeProvider value={esquema === 'dark' ? DarkTheme : DefaultTheme}>

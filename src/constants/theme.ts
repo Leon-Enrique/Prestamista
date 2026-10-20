@@ -64,6 +64,16 @@ export const Colors = {
 export type ThemeColor = keyof typeof Colors.light & keyof typeof Colors.dark;
 export type Tema = typeof Colors.light;
 
+/**
+ * Playfair Display, la serifa de los títulos: el toque elegante de la marca. Se carga en
+ * `app/_layout.tsx`; los nombres tienen que coincidir con los que exporta el paquete.
+ */
+export const FuenteElegante = {
+  cursiva: 'PlayfairDisplay_400Regular_Italic',
+  media: 'PlayfairDisplay_500Medium',
+  negrita: 'PlayfairDisplay_700Bold',
+} as const;
+
 export const Fonts = Platform.select({
   ios: {
     sans: 'system-ui',

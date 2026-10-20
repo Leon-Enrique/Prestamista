@@ -24,6 +24,7 @@ import {
 import {
   diasSinRespaldoParaAvisarDe,
   escribirConfiguracion,
+  nombreUsuarioDe,
   leerConfiguracion,
   reglasMoraDe,
 } from '@/datos/repositorios/config';
@@ -136,6 +137,17 @@ export default function PantallaAjustes() {
 
   return (
     <PantallaPrincipal titulo="Ajustes">
+      {datos ? (
+        <SeccionNombre
+          nombre={nombreUsuarioDe(datos.configuracion)}
+          alGuardar={async (nombre) => {
+            await escribirConfiguracion(db, 'nombre_usuario', nombre.trim(), ahora());
+            estado.recargar();
+            refrescar();
+          }}
+        />
+      ) : null}
+
       <Seccion titulo="Respaldo">
         {sinRespaldo ? (
           <Aviso tono="peligro" icono="cloud-offline">
@@ -219,6 +231,25 @@ export default function PantallaAjustes() {
         </Tarjeta>
       </Seccion>
     </PantallaPrincipal>
+  );
+}
+
+function SeccionNombre({
+  nombre,
+  alGuardar,
+}: {
+  nombre: string;
+  alGuardar: (nombre: string) => Promise<void>;
+}) {
+  const [texto, setTexto] = useState(nombre);
+  const cambiado = texto.trim() !== nombre && texto.trim().length > 0;
+  return (
+    <Seccion titulo="Tu nombre">
+      <Campo etiqueta="Cómo te saluda la app" valor={texto} onChange={setTexto} />
+      {cambiado ? (
+        <Boton titulo="Guardar nombre" icono="checkmark-circle" onPress={() => void alGuardar(texto)} />
+      ) : null}
+    </Seccion>
   );
 }
 

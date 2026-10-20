@@ -29,7 +29,7 @@ import {
   Texto,
   Vacio,
 } from '@/components/ui';
-import { Spacing } from '@/constants/theme';
+import { FuenteElegante, Spacing } from '@/constants/theme';
 import {
   actividadReciente,
   carteraActiva,
@@ -42,6 +42,7 @@ import {
   codigoPaisDe,
   diasSinRespaldoParaAvisarDe,
   leerConfiguracion,
+  nombreUsuarioDe,
 } from '@/datos/repositorios/config';
 import { diasSinRespaldo } from '@/datos/respaldo';
 import { aNumeroDeWhatsApp, mensajeDeRecordatorio } from '@/dominio/mensajes';
@@ -92,6 +93,7 @@ export default function PantallaCartera() {
       dias: diasSinRespaldo(configuracion, dia),
       limite: diasSinRespaldoParaAvisarDe(configuracion),
       codigoPais: codigoPaisDe(configuracion),
+      nombre: nombreUsuarioDe(configuracion),
     };
   }, [dia]);
 
@@ -153,18 +155,14 @@ export default function PantallaCartera() {
     <Pantalla style={{ paddingTop: top + Spacing.three }}>
       <Fila separado>
         <View style={styles.flex}>
-          <Texto variante="titulo" style={styles.saludo}>
-            {saludo()}
+          <Texto suave style={styles.saludo}>
+            {saludo()},
           </Texto>
-          <Texto variante="suave" suave>
-            {formatearDiaCorto(dia)}
-          </Texto>
-        </View>
-        <View style={[styles.avatar, { borderColor: tema.primario }]}>
-          <Texto variante="subtitulo" color={tema.primario}>
-            P
+          <Texto style={styles.nombre} numberOfLines={1}>
+            {avisos.datos?.nombre ?? ''}
           </Texto>
         </View>
+        <Avatar nombre={avisos.datos?.nombre ?? '?'} grande />
       </Fila>
 
       {cartera.error || totales.error ? (
@@ -400,15 +398,8 @@ function FilaPrestamo({
 
 const styles = StyleSheet.create({
   flex: { flex: 1, paddingRight: Spacing.two },
-  saludo: { fontWeight: '500' },
-  avatar: {
-    alignItems: 'center',
-    borderRadius: 26,
-    borderWidth: 2,
-    height: 52,
-    justifyContent: 'center',
-    width: 52,
-  },
+  saludo: { fontFamily: FuenteElegante.cursiva, fontSize: 20 },
+  nombre: { fontFamily: FuenteElegante.negrita, fontSize: 34, letterSpacing: 0.3 },
   pieDestacada: { marginTop: Spacing.two },
   divisor: { alignSelf: 'stretch', width: StyleSheet.hairlineWidth },
   filaAgenda: {

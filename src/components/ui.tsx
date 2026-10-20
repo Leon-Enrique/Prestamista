@@ -25,7 +25,7 @@ import {
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { Spacing } from '@/constants/theme';
+import { FuenteElegante, Spacing } from '@/constants/theme';
 import { useTheme } from '@/hooks/use-theme';
 import { formatear, type Dinero } from '@/nucleo/dinero';
 
@@ -749,7 +749,7 @@ const styles = StyleSheet.create({
   vacio: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.five },
   vacioDetalle: { textAlign: 'center' },
   cargando: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.five },
-  tituloPrincipal: { fontWeight: '600' },
+  tituloPrincipal: { fontFamily: FuenteElegante.negrita, fontSize: 32, fontWeight: 'normal' },
   tachado: { textDecorationLine: 'line-through' },
   paginador: { gap: Spacing.four, justifyContent: 'center', paddingTop: Spacing.two },
   avatar: { alignItems: 'center', borderWidth: 2, justifyContent: 'center' },
