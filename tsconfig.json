@@ -1,0 +1,27 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    // `node` es para las pruebas del esquema, que corren con `node:sqlite` fuera del
+    // dispositivo. Al declarar `types` explícitamente hay que listar también `react`,
+    // porque deja de incluirse solo.
+    "types": [
+      "node",
+      "react"
+    ],
+    "paths": {
+      "@/*": [
+        "./src/*"
+      ],
+      "@/assets/*": [
+        "./assets/*"
+      ]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
+}

@@ -1,0 +1,5 @@
+# Finales de línea LF en el repositorio, para que no aparezcan cambios falsos entre Windows y el resto.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.ttf binary
