@@ -247,9 +247,11 @@ export type MovimientoCaja = {
   readonly detalle: string | null;
 };
 
+/** Los movimientos de caja, del más reciente al más viejo; `desde` salta los primeros. */
 export async function ultimosMovimientosDeCaja(
   db: EjecutorSQL,
   limite = 40,
+  desde = 0,
 ): Promise<MovimientoCaja[]> {
   const filas = await db.getAllAsync<{
     id: number;
@@ -262,8 +264,9 @@ export async function ultimosMovimientosDeCaja(
     `SELECT id, tipo, fecha, moneda, monto_centavos, detalle
        FROM caja_movimientos
       ORDER BY fecha DESC, id DESC
-      LIMIT ?`,
+      LIMIT ? OFFSET ?`,
     limite,
+    desde,
   );
 
   return filas.map((fila) => ({
@@ -273,6 +276,11 @@ export async function ultimosMovimientosDeCaja(
     monto: dinero(fila.monto_centavos, fila.moneda as Moneda),
     detalle: fila.detalle,
   }));
+}
+
+export async function contarMovimientosDeCaja(db: EjecutorSQL): Promise<number> {
+  const fila = await db.getFirstAsync<{ n: number }>('SELECT COUNT(*) AS n FROM caja_movimientos');
+  return Number(fila?.n ?? 0);
 }
 
 export async function saldoDeCaja(db: EjecutorSQL): Promise<Dinero[]> {

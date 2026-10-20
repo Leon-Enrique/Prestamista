@@ -19,6 +19,7 @@ import {
   Fila,
   Monto,
   Opciones,
+  Paginador,
   PantallaPrincipal,
   Seccion,
   Tarjeta,
@@ -26,7 +27,12 @@ import {
   Texto,
 } from '@/components/ui';
 import { enTransaccion } from '@/datos/base';
-import { cajaIniciada, saldoDeCaja, ultimosMovimientosDeCaja } from '@/datos/consultas';
+import {
+  cajaIniciada,
+  contarMovimientosDeCaja,
+  saldoDeCaja,
+  ultimosMovimientosDeCaja,
+} from '@/datos/consultas';
 import {
   desdeTexto,
   esNegativo,
@@ -39,6 +45,8 @@ import { ahora, formatearDiaCorto, hoy } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
 import { registrarManual } from '@/servicios/caja';
+
+const POR_PAGINA = 10;
 
 const TIPO: Record<string, { etiqueta: string; icono: keyof typeof Ionicons.glyphMap }> = {
   cobro: { etiqueta: 'Cobro', icono: 'arrow-down' },
@@ -55,7 +63,13 @@ export default function PantallaCaja() {
 
   const saldos = useConsulta((db) => saldoDeCaja(db));
   const iniciada = useConsulta((db) => cajaIniciada(db));
-  const movimientos = useConsulta((db) => ultimosMovimientosDeCaja(db));
+  const [pagina, setPagina] = useState(0);
+  const movimientos = useConsulta(
+    (db) => ultimosMovimientosDeCaja(db, POR_PAGINA, pagina * POR_PAGINA),
+    [pagina],
+  );
+  const cantidad = useConsulta((db) => contarMovimientosDeCaja(db));
+  const totalPaginas = Math.ceil((cantidad.datos ?? 0) / POR_PAGINA);
 
   useFocusEffect(useCallback(() => refrescar(), [refrescar]));
 
@@ -130,6 +144,7 @@ export default function PantallaCaja() {
                 />
               );
             })}
+            <Paginador pagina={pagina} totalPaginas={totalPaginas} onCambiar={setPagina} />
           </Tarjeta>
         </Seccion>
       ) : null}

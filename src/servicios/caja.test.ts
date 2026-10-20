@@ -1,7 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { crearBaseDePrueba, type BaseDePrueba } from '../datos/baseDePrueba';
-import { cajaIniciada, saldoDeCaja } from '../datos/consultas';
+import {
+  cajaIniciada,
+  contarMovimientosDeCaja,
+  saldoDeCaja,
+  ultimosMovimientosDeCaja,
+} from '../datos/consultas';
 import type { EjecutorSQL } from '../datos/ejecutor';
 import { crearCliente } from '../datos/repositorios/clientes';
 import type { Condiciones } from '../dominio/tipos';
@@ -298,5 +303,27 @@ describe('caja inicial', () => {
     });
     expect(await cajaIniciada(db)).toBe(true);
     expect(await saldoBs()).toBe('Bs 4.000,00');
+  });
+});
+
+describe('movimientos de caja por páginas', () => {
+  it('cuenta todos y devuelve cada página sin repetir', async () => {
+    for (let i = 1; i <= 12; i += 1) {
+      await registrarManual(db, {
+        tipo: 'aporte',
+        monto: desdeUnidades(i, 'BOB'),
+        fecha: HOY,
+        detalle: `aporte ${i}`,
+        ahora: AHORA,
+      });
+    }
+    expect(await contarMovimientosDeCaja(db)).toBe(12);
+
+    const primera = await ultimosMovimientosDeCaja(db, 10, 0);
+    const segunda = await ultimosMovimientosDeCaja(db, 10, 10);
+    expect(primera).toHaveLength(10);
+    expect(segunda).toHaveLength(2);
+    expect(primera[0].detalle).toBe('aporte 12');
+    expect(segunda[1].detalle).toBe('aporte 1');
   });
 });

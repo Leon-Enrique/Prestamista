@@ -579,6 +579,42 @@ export function FilaActividad({
   );
 }
 
+/** Flechas para pasar de página en una lista larga: "‹  2 de 5  ›". */
+export function Paginador({
+  pagina,
+  totalPaginas,
+  onCambiar,
+}: {
+  /** Empieza en 0. */
+  pagina: number;
+  totalPaginas: number;
+  onCambiar: (pagina: number) => void;
+}) {
+  const tema = useTheme();
+  if (totalPaginas <= 1) return null;
+  const hayAnterior = pagina > 0;
+  const haySiguiente = pagina < totalPaginas - 1;
+  return (
+    <View style={[styles.fila, styles.paginador]}>
+      <BotonIcono
+        icono="chevron-back"
+        etiqueta="Página anterior"
+        color={hayAnterior ? tema.primarioTinta : tema.borde}
+        onPress={() => hayAnterior && onCambiar(pagina - 1)}
+      />
+      <Texto suave style={styles.tabular}>
+        {pagina + 1} de {totalPaginas}
+      </Texto>
+      <BotonIcono
+        icono="chevron-forward"
+        etiqueta="Página siguiente"
+        color={haySiguiente ? tema.primarioTinta : tema.borde}
+        onPress={() => haySiguiente && onCambiar(pagina + 1)}
+      />
+    </View>
+  );
+}
+
 // --- Señales --------------------------------------------------------------------------
 
 export function Insignia({ texto, color, fondo }: { texto: string; color: string; fondo: string }) {
@@ -715,6 +751,7 @@ const styles = StyleSheet.create({
   cargando: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.five },
   tituloPrincipal: { fontWeight: '600' },
   tachado: { textDecorationLine: 'line-through' },
+  paginador: { gap: Spacing.four, justifyContent: 'center', paddingTop: Spacing.two },
   avatar: { alignItems: 'center', borderWidth: 2, justifyContent: 'center' },
   botonRedondo: {
     alignItems: 'center',
