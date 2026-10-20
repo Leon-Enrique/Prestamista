@@ -8,22 +8,25 @@
 
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 
-import { DesgloseDeCobro } from '@/components/desglose-de-cobro';
+import { textoReparto } from '@/components/desglose-de-cobro';
 import {
+  Avatar,
   Aviso,
   Boton,
-  BotonIcono,
   Campo,
   Cargando,
+  CuadroIcono,
   Dato,
+  FilaActividad,
   Fila,
   Insignia,
   Monto,
   Pantalla,
   Seccion,
   Tarjeta,
+  TarjetaDestacada,
   Texto,
   Vacio,
 } from '@/components/ui';
@@ -219,10 +222,19 @@ export default function PantallaPrestamo() {
 
   return (
     <Pantalla>
-      <Tarjeta>
-        <Fila separado>
-          <Texto variante="titulo">{cliente?.nombre ?? 'Cliente'}</Texto>
-          {activo ? null : perdido ? (
+      <Fila>
+        <Avatar nombre={cliente?.nombre ?? '?'} grande />
+        <View style={styles.flex}>
+          <Texto variante="titulo" numberOfLines={2}>
+            {cliente?.nombre ?? 'Cliente'}
+          </Texto>
+          <Texto variante="suave" suave>
+            {ETIQUETA_MODALIDAD[condiciones.modalidad]} ·{' '}
+            {porcentajeDeTasa(condiciones.tasa).toString().replace('.', ',')}%{' '}
+            {POR_PERIODO[condiciones.tasa.periodo]}
+          </Texto>
+        </View>
+        {activo ? null : perdido ? (
             <Insignia texto="Perdido" color={tema.vencido} fondo={tema.vencidoSuave} />
           ) : (
             <Insignia
@@ -230,40 +242,24 @@ export default function PantallaPrestamo() {
               color={tema.alDia}
               fondo={tema.alDiaSuave}
             />
-          )}
-        </Fila>
-        <Texto variante="suave" suave>
-          {ETIQUETA_MODALIDAD[condiciones.modalidad]} ·{' '}
-          {porcentajeDeTasa(condiciones.tasa).toString().replace('.', ',')}%{' '}
-          {POR_PERIODO[condiciones.tasa.periodo]}
-        </Texto>
-        <Dato etiqueta="Prestado">
-          <Monto valor={condiciones.capital} />
-        </Dato>
-        <Dato etiqueta="Entregado">
-          <Texto>{formatearDiaCorto(condiciones.fechaDesembolso)}</Texto>
-        </Dato>
-        {condiciones.vencimientoCapital ? (
-          <Dato etiqueta="Capital vence">
-            <Texto>{formatearDiaCorto(condiciones.vencimientoCapital)}</Texto>
-          </Dato>
-        ) : null}
-      </Tarjeta>
+        )}
+      </Fila>
 
-      <Tarjeta
-        acento={perdido || esPositivo(deuda.vencido) ? tema.vencido : tema.primario}>
-        {perdido ? (
-          <Dato etiqueta="Perdido">
-            <Monto valor={deuda.capital} variante="titulo" color={tema.vencido} />
-          </Dato>
-        ) : null}
-        <Dato etiqueta="Debe">
-          <Monto valor={deuda.total} variante="titulo" />
-        </Dato>
-        {esPositivo(deuda.vencido) ? (
-          <Dato etiqueta="Vencido">
-            <Monto valor={deuda.vencido} color={tema.vencido} />
-          </Dato>
+      <TarjetaDestacada>
+        <Texto
+          variante="etiqueta"
+          color={perdido || esPositivo(deuda.vencido) ? tema.vencido : tema.primario}>
+          {perdido ? 'Perdido' : activo ? 'Debe' : 'No debe nada'}
+        </Texto>
+        <Monto
+          valor={perdido ? deuda.capital : deuda.total}
+          variante="titulo"
+          color={perdido ? tema.vencido : undefined}
+        />
+        {esPositivo(deuda.vencido) && !perdido ? (
+          <Texto variante="suave" color={tema.vencido}>
+            {formatear(deuda.vencido)} vencido
+          </Texto>
         ) : null}
         {esPositivo(deuda.interes) ? (
           <Dato etiqueta="Interés">
@@ -278,6 +274,38 @@ export default function PantallaPrestamo() {
         <Dato etiqueta="Capital">
           <Monto valor={deuda.capital} />
         </Dato>
+      </TarjetaDestacada>
+
+      <Tarjeta>
+        <Fila>
+          <CuadroIcono
+            icono="cash"
+            color={tema.primario}
+            etiqueta="Ya te pagó"
+            valor={formatear(yaPago)}
+          />
+          <View style={[styles.divisor, { backgroundColor: tema.borde }]} />
+          <CuadroIcono
+            icono="trending-up"
+            color={tema.alDia}
+            etiqueta="Ganaste"
+            valor={formatear(ganaste)}
+          />
+        </Fila>
+      </Tarjeta>
+
+      <Tarjeta>
+        <Dato etiqueta="Prestado">
+          <Monto valor={condiciones.capital} />
+        </Dato>
+        <Dato etiqueta="Entregado">
+          <Texto>{formatearDiaCorto(condiciones.fechaDesembolso)}</Texto>
+        </Dato>
+        {condiciones.vencimientoCapital ? (
+          <Dato etiqueta="Capital vence">
+            <Texto>{formatearDiaCorto(condiciones.vencimientoCapital)}</Texto>
+          </Dato>
+        ) : null}
       </Tarjeta>
 
       {perdonables.length > 0 && !verPerdonables ? (
@@ -347,15 +375,6 @@ export default function PantallaPrestamo() {
         </Seccion>
       ) : null}
 
-      <Tarjeta>
-        <Dato etiqueta="Ya te pagó">
-          <Monto valor={yaPago} variante="subtitulo" />
-        </Dato>
-        <Dato etiqueta="Ganaste">
-          <Monto valor={ganaste} variante="subtitulo" color={tema.alDia} />
-        </Dato>
-      </Tarjeta>
-
       {activo ? (
         <>
           <Boton
@@ -419,60 +438,57 @@ export default function PantallaPrestamo() {
 
       <Seccion titulo="Cobros">
         {cobros.length === 0 ? <Vacio titulo="Todavía no pagó nada" /> : null}
-        {cobros.map((cobro) => (
-          <Tarjeta key={cobro.pagoId}>
-            <Fila separado>
-              <Texto variante="subtitulo" style={cobro.anulado ? { opacity: 0.5 } : undefined}>
-                {formatear(cobro.monto)}
-              </Texto>
-              {cobro.anulado ? (
-                <Insignia texto="Anulado" color={tema.vencido} fondo={tema.vencidoSuave} />
-              ) : anulando === cobro.pagoId ? null : (
-                <BotonIcono
-                  icono="close-circle-outline"
-                  etiqueta="Anular este cobro"
-                  color={tema.textSecondary}
-                  onPress={() => {
-                    cerrarFormularios();
-                    setAnulando(cobro.pagoId);
-                  }}
+        {cobros.length > 0 ? (
+          <Tarjeta>
+            {cobros.map((cobro) => (
+              <View key={cobro.pagoId}>
+                <FilaActividad
+                  icono={cobro.anulado ? 'close' : 'arrow-down'}
+                  color={cobro.anulado ? tema.textSecondary : tema.alDia}
+                  titulo={formatearDiaCorto(cobro.fecha)}
+                  detalle={cobro.anulado ? 'Anulado' : textoReparto(cobro)}
+                  monto={cobro.monto}
+                  entra
+                  apagado={cobro.anulado}
+                  onPress={
+                    cobro.anulado
+                      ? undefined
+                      : () => {
+                          cerrarFormularios();
+                          setAnulando(anulando === cobro.pagoId ? null : cobro.pagoId);
+                        }
+                  }
                 />
-              )}
-            </Fila>
-            <Texto variante="suave" suave>
-              {formatearDiaCorto(cobro.fecha)}
-            </Texto>
-
-            {cobro.anulado ? null : <DesgloseDeCobro cobro={cobro} />}
-
-            {anulando === cobro.pagoId ? (
-              <>
-                <Campo
-                  etiqueta="¿Por qué lo anulás?"
-                  valor={motivo}
-                  onChange={setMotivo}
-                  placeholder="Me equivoqué de monto"
-                  autoFocus
-                />
-                <Fila>
-                  <Boton
-                    titulo="Cancelar"
-                    variante="secundario"
-                    onPress={cerrarFormularios}
-                    style={{ flex: 1 }}
-                  />
-                  <Boton
-                    titulo="Anular"
-                    variante="peligro"
-                    onPress={() => void anularPago(cobro.pagoId)}
-                    cargando={trabajando}
-                    style={{ flex: 1 }}
-                  />
-                </Fila>
-              </>
-            ) : null}
+                {anulando === cobro.pagoId ? (
+                  <View style={styles.anular}>
+                    <Campo
+                      etiqueta="Anular este cobro: ¿por qué?"
+                      valor={motivo}
+                      onChange={setMotivo}
+                      placeholder="Me equivoqué de monto"
+                      autoFocus
+                    />
+                    <Fila>
+                      <Boton
+                        titulo="Cancelar"
+                        variante="secundario"
+                        onPress={cerrarFormularios}
+                        style={{ flex: 1 }}
+                      />
+                      <Boton
+                        titulo="Anular"
+                        variante="peligro"
+                        onPress={() => void anularPago(cobro.pagoId)}
+                        cargando={trabajando}
+                        style={{ flex: 1 }}
+                      />
+                    </Fila>
+                  </View>
+                ) : null}
+              </View>
+            ))}
           </Tarjeta>
-        ))}
+        ) : null}
       </Seccion>
 
       {activo && !perdiendo ? (
@@ -519,3 +535,9 @@ export default function PantallaPrestamo() {
     </Pantalla>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1, gap: 2 },
+  divisor: { alignSelf: 'stretch', width: StyleSheet.hairlineWidth },
+  anular: { gap: 8, paddingBottom: 8 },
+});

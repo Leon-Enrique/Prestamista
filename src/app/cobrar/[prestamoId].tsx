@@ -9,19 +9,24 @@
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Alert } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Alert, StyleSheet, View } from 'react-native';
 
 import {
+  Avatar,
   Aviso,
   Boton,
   Campo,
   Cargando,
+  CuadroIcono,
   Dato,
+  Fila,
   Monto,
   Opciones,
   Pantalla,
   Seccion,
   Tarjeta,
+  TarjetaDestacada,
   Texto,
   Vacio,
 } from '@/components/ui';
@@ -39,7 +44,7 @@ import { aNumeroDeWhatsApp, mensajeDeRecibo } from '@/dominio/mensajes';
 import { resumenDeuda } from '@/dominio/obligaciones';
 import { MEDIOS_DE_PAGO, type MedioPago } from '@/dominio/tipos';
 import { enviarPorWhatsApp } from '@/nucleo/compartir';
-import { desdeTexto, esPositivo, formatear, restar, type Dinero } from '@/nucleo/dinero';
+import { desdeTexto, esPositivo, formatear, restar, sumar, type Dinero } from '@/nucleo/dinero';
 import { ahora, hoy, type Dia } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
@@ -187,21 +192,28 @@ export default function PantallaCobrar() {
 
   return (
     <Pantalla>
-      <Tarjeta acento={deuda && esPositivo(deuda.vencido) ? tema.vencido : tema.primario}>
-        <Texto variante="titulo">{cliente?.nombre ?? 'Cliente'}</Texto>
-        {deuda ? (
-          <>
-            <Dato etiqueta="Debe">
-              <Monto valor={deuda.total} variante="subtitulo" />
-            </Dato>
-            {esPositivo(deuda.vencido) ? (
-              <Dato etiqueta="Vencido">
-                <Monto valor={deuda.vencido} color={tema.vencido} />
-              </Dato>
-            ) : null}
-          </>
-        ) : null}
-      </Tarjeta>
+      <Fila>
+        <Avatar nombre={cliente?.nombre ?? '?'} grande />
+        <Texto variante="titulo" numberOfLines={2} style={estilos.flex}>
+          {cliente?.nombre ?? 'Cliente'}
+        </Texto>
+      </Fila>
+
+      {deuda ? (
+        <TarjetaDestacada>
+          <Texto
+            variante="etiqueta"
+            color={esPositivo(deuda.vencido) ? tema.vencido : tema.primario}>
+            Debe
+          </Texto>
+          <Monto valor={deuda.total} variante="titulo" />
+          {esPositivo(deuda.vencido) ? (
+            <Texto variante="suave" color={tema.vencido}>
+              {formatear(deuda.vencido)} vencido
+            </Texto>
+          ) : null}
+        </TarjetaDestacada>
+      ) : null}
 
       <Seccion titulo="Cuánto paga">
         <Campo
@@ -230,18 +242,27 @@ export default function PantallaCobrar() {
 
       {vista ? (
         <Seccion titulo="Se reparte así">
-          <Tarjeta acento={tema.primario}>
+          <Tarjeta>
+            <Fila>
+              <CuadroIcono
+                icono="trending-up"
+                color={tema.alDia}
+                etiqueta="Interés (ganancia)"
+                valor={formatear(sumar(vista.desglose.interes, vista.desglose.mora))}
+              />
+              <View style={[estilos.divisor, { backgroundColor: tema.borde }]} />
+              <CuadroIcono
+                icono="arrow-undo"
+                color={tema.primario}
+                etiqueta="Capital"
+                valor={formatear(vista.desglose.capital)}
+              />
+            </Fila>
             {esPositivo(vista.desglose.mora) ? (
-              <Dato etiqueta="Penalización">
+              <Dato etiqueta="de eso, penalización">
                 <Monto valor={vista.desglose.mora} />
               </Dato>
             ) : null}
-            <Dato etiqueta="Interés (ganancia)">
-              <Monto valor={vista.desglose.interes} variante="subtitulo" />
-            </Dato>
-            <Dato etiqueta="Capital">
-              <Monto valor={vista.desglose.capital} variante="subtitulo" />
-            </Dato>
             {esPositivo(vista.resultado.sobrante) ? (
               <Dato etiqueta="Le queda a favor">
                 <Monto valor={vista.resultado.sobrante} />
@@ -331,13 +352,16 @@ function VistaRecibo({
 
   return (
     <Pantalla>
-      <Aviso tono="bien" icono="checkmark-circle">
-        Cobrado {formatear(resultado.aplicado)}
-      </Aviso>
-
-      <Tarjeta acento={tema.alDia}>
-        <Texto variante="etiqueta" suave>
-          Recibo para {cliente}
+      <TarjetaDestacada>
+        <Fila separado>
+          <Texto variante="etiqueta" color={tema.alDia}>
+            Cobrado
+          </Texto>
+          <Ionicons name="checkmark-circle" size={26} color={tema.alDia} />
+        </Fila>
+        <Monto valor={resultado.aplicado} variante="titulo" />
+        <Texto variante="suave" suave>
+          {cliente}
         </Texto>
         {esPositivo(resultado.desglose.mora) ? (
           <Dato etiqueta="Penalización">
@@ -357,7 +381,7 @@ function VistaRecibo({
         <Dato etiqueta="Debe">
           <Monto valor={saldoRestante} variante="subtitulo" />
         </Dato>
-      </Tarjeta>
+      </TarjetaDestacada>
 
       {resultado.prestamoCerrado ? (
         <Aviso tono="bien" icono="flag">
@@ -380,3 +404,8 @@ function VistaRecibo({
     </Pantalla>
   );
 }
+
+const estilos = StyleSheet.create({
+  flex: { flex: 1 },
+  divisor: { alignSelf: 'stretch', width: StyleSheet.hairlineWidth },
+});

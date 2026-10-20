@@ -22,6 +22,7 @@ import {
   Pantalla,
   Seccion,
   Tarjeta,
+  TarjetaDestacada,
   Texto,
   Vacio,
 } from '@/components/ui';
@@ -59,6 +60,7 @@ import {
   type Frecuencia,
 } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
+import { useTheme } from '@/hooks/use-theme';
 import { desembolsar } from '@/servicios/desembolsar';
 import { devengar } from '@/servicios/devengar';
 
@@ -97,6 +99,7 @@ function diaDeTexto(texto: string): Dia | null {
 
 export default function PantallaNuevoPrestamo() {
   const { db, refrescar } = useBase();
+  const tema = useTheme();
   const parametros = useLocalSearchParams<{ clienteId?: string }>();
   const hoyDia = hoy();
 
@@ -355,62 +358,59 @@ export default function PantallaNuevoPrestamo() {
           </Seccion>
 
           {vista ? (
-            <Seccion titulo="Resumen">
-              <Tarjeta>
-                {esAbierto ? (
-                  <>
-                    <Dato etiqueta={`Interés por ${NOMBRE_FRECUENCIA[frecuencia].slice(0, -1)}`}>
-                      <Monto valor={vista.lineas[0].interes} variante="subtitulo" />
-                    </Dato>
-                    {sinFecha ? null : (
+            <TarjetaDestacada>
+              {esAbierto ? (
+                <>
+                  <Texto variante="etiqueta" color={tema.alDia}>
+                    Interés por {NOMBRE_FRECUENCIA[frecuencia].slice(0, -1)}
+                  </Texto>
+                  <Monto valor={vista.lineas[0].interes} variante="titulo" />
+                  <Dato etiqueta="Capital">
+                    <Monto valor={condiciones!.capital} />
+                  </Dato>
+                  {sinFecha ? null : (
+                    <>
                       <Dato etiqueta={`Ganás en ${plazo} ${NOMBRE_FRECUENCIA[frecuencia]}`}>
-                        <Monto valor={vista.resumen.totalInteres} />
+                        <Monto valor={vista.resumen.totalInteres} color={tema.alDia} />
                       </Dato>
-                    )}
-                    <Dato etiqueta="Capital">
-                      <Monto valor={condiciones!.capital} />
-                    </Dato>
-                    {sinFecha ? null : (
                       <Dato etiqueta="Te devuelve">
                         <Monto valor={vista.resumen.totalAPagar} variante="subtitulo" />
                       </Dato>
-                    )}
-                    {capitalConFecha ? (
-                      <Dato etiqueta="Capital vence">
-                        <Texto>
-                          {formatearDiaCorto(
-                            vista.lineas[vista.lineas.length - 1].vencimiento,
-                          )}
-                        </Texto>
-                      </Dato>
-                    ) : null}
-                  </>
-                ) : (
-                  <>
-                    <Dato etiqueta="Cuota">
-                      <Monto valor={vista.resumen.cuotaMaxima} variante="subtitulo" />
-                      {vista.resumen.cuotaMinima.centavos !==
-                      vista.resumen.cuotaMaxima.centavos ? (
-                        <Texto variante="suave" suave>
-                          baja hasta {formatear(vista.resumen.cuotaMinima)}
-                        </Texto>
-                      ) : null}
-                    </Dato>
-                    <Dato etiqueta="Ganás">
-                      <Monto valor={vista.resumen.totalInteres} />
-                    </Dato>
-                    <Dato etiqueta="Te devuelve">
-                      <Monto valor={vista.resumen.totalAPagar} variante="subtitulo" />
-                    </Dato>
-                    <Dato etiqueta="Última cuota">
+                    </>
+                  )}
+                  {capitalConFecha ? (
+                    <Dato etiqueta="Capital vence">
                       <Texto>
                         {formatearDiaCorto(vista.lineas[vista.lineas.length - 1].vencimiento)}
                       </Texto>
                     </Dato>
-                  </>
-                )}
-              </Tarjeta>
-            </Seccion>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  <Texto variante="etiqueta" color={tema.alDia}>
+                    {vista.lineas.length === 1 ? 'Un pago de' : `${vista.lineas.length} cuotas de`}
+                  </Texto>
+                  <Monto valor={vista.resumen.cuotaMaxima} variante="titulo" />
+                  {vista.resumen.cuotaMinima.centavos !== vista.resumen.cuotaMaxima.centavos ? (
+                    <Texto variante="suave" suave>
+                      baja hasta {formatear(vista.resumen.cuotaMinima)}
+                    </Texto>
+                  ) : null}
+                  <Dato etiqueta="Ganás">
+                    <Monto valor={vista.resumen.totalInteres} color={tema.alDia} />
+                  </Dato>
+                  <Dato etiqueta="Te devuelve">
+                    <Monto valor={vista.resumen.totalAPagar} variante="subtitulo" />
+                  </Dato>
+                  <Dato etiqueta="Última cuota">
+                    <Texto>
+                      {formatearDiaCorto(vista.lineas[vista.lineas.length - 1].vencimiento)}
+                    </Texto>
+                  </Dato>
+                </>
+              )}
+            </TarjetaDestacada>
           ) : capitalTexto.trim() ? (
             <Aviso tono="peligro">Revisá el monto, la tasa y el plazo.</Aviso>
           ) : null}

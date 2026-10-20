@@ -537,6 +537,7 @@ export function FilaActividad({
   detalle,
   monto,
   entra,
+  apagado,
   onPress,
 }: {
   icono: keyof typeof Ionicons.glyphMap;
@@ -546,6 +547,8 @@ export function FilaActividad({
   monto: Dinero;
   /** Plata que entra: va en verde y con "+". */
   entra: boolean;
+  /** Para lo que no movió plata, como un cobro anulado: gris y sin signo. */
+  apagado?: boolean;
   onPress?: () => void;
 }) {
   const tema = useTheme();
@@ -565,8 +568,11 @@ export function FilaActividad({
           {detalle}
         </Texto>
       </View>
-      <Texto variante="subtitulo" color={entra ? tema.alDia : tema.text} style={styles.tabular}>
-        {entra ? '+' : '−'}
+      <Texto
+        variante="subtitulo"
+        color={apagado ? tema.textSecondary : entra ? tema.alDia : tema.text}
+        style={[styles.tabular, apagado && styles.tachado]}>
+        {apagado ? '' : entra ? '+' : '−'}
         {formatear(monto)}
       </Texto>
     </Pressable>
@@ -708,6 +714,7 @@ const styles = StyleSheet.create({
   vacioDetalle: { textAlign: 'center' },
   cargando: { alignItems: 'center', gap: Spacing.two, paddingVertical: Spacing.five },
   tituloPrincipal: { fontWeight: '600' },
+  tachado: { textDecorationLine: 'line-through' },
   avatar: { alignItems: 'center', borderWidth: 2, justifyContent: 'center' },
   botonRedondo: {
     alignItems: 'center',

@@ -8,19 +8,23 @@
 
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 import { textoReparto } from '@/components/desglose-de-cobro';
 import {
+  Avatar,
   Boton,
   BotonIcono,
   Cargando,
-  Dato,
+  CuadroIcono,
+  FilaActividad,
   Fila,
   Insignia,
   Monto,
   Pantalla,
   Seccion,
   Tarjeta,
+  TarjetaDestacada,
   Texto,
   Vacio,
 } from '@/components/ui';
@@ -32,7 +36,7 @@ import {
 } from '@/datos/consultas';
 import { obtenerCliente } from '@/datos/repositorios/clientes';
 import { ETIQUETA_MODALIDAD } from '@/dominio/tipos';
-import { cero, esPositivo, sumar } from '@/nucleo/dinero';
+import { cero, esPositivo, formatear, sumar } from '@/nucleo/dinero';
 import { formatearDiaCorto, hoy } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
@@ -82,28 +86,29 @@ export default function PantallaCliente() {
 
   return (
     <Pantalla>
-      <Tarjeta>
-        <Fila separado>
-          <Texto variante="titulo" style={{ flex: 1 }}>
+      <Fila>
+        <Avatar nombre={cliente.nombre} grande />
+        <View style={styles.flex}>
+          <Texto variante="titulo" numberOfLines={2}>
             {cliente.nombre}
           </Texto>
-          <BotonIcono
-            icono="create-outline"
-            etiqueta="Editar cliente"
-            onPress={() => router.push({ pathname: '/cliente/editar', params: { id: clienteId } })}
-          />
-        </Fila>
-        {contacto ? (
-          <Texto variante="suave" suave>
-            {contacto}
-          </Texto>
-        ) : null}
-        {cliente.direccion ? (
-          <Texto variante="suave" suave>
-            {cliente.direccion}
-          </Texto>
-        ) : null}
-      </Tarjeta>
+          {contacto ? (
+            <Texto variante="suave" suave>
+              {contacto}
+            </Texto>
+          ) : null}
+          {cliente.direccion ? (
+            <Texto variante="suave" suave>
+              {cliente.direccion}
+            </Texto>
+          ) : null}
+        </View>
+        <BotonIcono
+          icono="create-outline"
+          etiqueta="Editar cliente"
+          onPress={() => router.push({ pathname: '/cliente/editar', params: { id: clienteId } })}
+        />
+      </Fila>
 
       {(ficha.datos?.comportamiento ?? []).map((resumen) => {
         const moneda = resumen.moneda;
@@ -117,25 +122,39 @@ export default function PantallaCliente() {
         const pago = sumar(resumen.interesCobrado, resumen.moraCobrada, resumen.capitalRecuperado);
         const gano = sumar(resumen.interesCobrado, resumen.moraCobrada);
         return (
-          <Tarjeta key={moneda} acento={esPositivo(debe) ? tema.primario : tema.alDia}>
-            <Dato etiqueta="Le prestaste">
-              <Monto valor={resumen.capitalEntregado} variante="subtitulo" />
-            </Dato>
-            <Dato etiqueta="Te pagó">
-              <Monto valor={pago} variante="subtitulo" />
-            </Dato>
-            <Dato etiqueta="Ganaste">
-              <Monto valor={gano} color={tema.alDia} />
-            </Dato>
-            <Dato etiqueta="Debe">
+          <View key={moneda} style={styles.bloque}>
+            <TarjetaDestacada>
+              <Texto variante="etiqueta" color={esPositivo(debe) ? tema.primario : tema.alDia}>
+                {esPositivo(debe) ? 'Te debe' : 'No te debe nada'}
+              </Texto>
               <Monto valor={debe} variante="titulo" />
-            </Dato>
-            {perdido ? (
-              <Dato etiqueta="Perdido">
-                <Monto valor={perdido.perdido} color={tema.vencido} />
-              </Dato>
-            ) : null}
-          </Tarjeta>
+              <Texto variante="suave" suave>
+                Le prestaste {formatear(resumen.capitalEntregado)}
+              </Texto>
+              {perdido ? (
+                <Texto variante="suave" color={tema.vencido}>
+                  Perdido {formatear(perdido.perdido)}
+                </Texto>
+              ) : null}
+            </TarjetaDestacada>
+            <Tarjeta>
+              <Fila>
+                <CuadroIcono
+                  icono="cash"
+                  color={tema.primario}
+                  etiqueta="Te pagó"
+                  valor={formatear(pago)}
+                />
+                <View style={[styles.divisor, { backgroundColor: tema.borde }]} />
+                <CuadroIcono
+                  icono="trending-up"
+                  color={tema.alDia}
+                  etiqueta="Ganaste"
+                  valor={formatear(gano)}
+                />
+              </Fila>
+            </Tarjeta>
+          </View>
         );
       })}
 
@@ -192,27 +211,28 @@ export default function PantallaCliente() {
 
       {cobros.length > 0 ? (
         <Seccion titulo="Historial de pagos">
-          {cobros.map((cobro) => (
-            <Tarjeta key={cobro.pagoId}>
-              <Fila separado>
-                <Texto variante="subtitulo">{formatearDiaCorto(cobro.fecha)}</Texto>
-                <Monto
-                  valor={cobro.monto}
-                  variante="subtitulo"
-                  color={cobro.anulado ? tema.textSecondary : undefined}
-                />
-              </Fila>
-              {cobro.anulado ? (
-                <Insignia texto="Anulado" color={tema.vencido} fondo={tema.vencidoSuave} />
-              ) : (
-                <Texto variante="suave" suave>
-                  {textoReparto(cobro)}
-                </Texto>
-              )}
-            </Tarjeta>
-          ))}
+          <Tarjeta>
+            {cobros.map((cobro) => (
+              <FilaActividad
+                key={cobro.pagoId}
+                icono={cobro.anulado ? 'close' : 'arrow-down'}
+                color={cobro.anulado ? tema.textSecondary : tema.alDia}
+                titulo={formatearDiaCorto(cobro.fecha)}
+                detalle={cobro.anulado ? 'Anulado' : textoReparto(cobro)}
+                monto={cobro.monto}
+                entra
+                apagado={cobro.anulado}
+              />
+            ))}
+          </Tarjeta>
         </Seccion>
       ) : null}
     </Pantalla>
   );
 }
+
+const styles = StyleSheet.create({
+  flex: { flex: 1, gap: 2 },
+  bloque: { gap: 16 },
+  divisor: { alignSelf: 'stretch', width: StyleSheet.hairlineWidth },
+});
