@@ -7,27 +7,38 @@
 
 import type { Ionicons } from '@expo/vector-icons';
 import { router, useFocusEffect } from 'expo-router';
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
+import { Alert } from 'react-native';
 
 import {
   Boton,
   BotonRedondo,
+  Campo,
   Cargando,
   FilaActividad,
   Fila,
   Monto,
+  Opciones,
   PantallaPrincipal,
   Seccion,
   Tarjeta,
   TarjetaDestacada,
   Texto,
-  Vacio,
 } from '@/components/ui';
-import { saldoDeCaja, ultimosMovimientosDeCaja } from '@/datos/consultas';
-import { esNegativo, negar, nombreMoneda } from '@/nucleo/dinero';
-import { formatearDiaCorto } from '@/nucleo/fechas';
+import { enTransaccion } from '@/datos/base';
+import { cajaIniciada, saldoDeCaja, ultimosMovimientosDeCaja } from '@/datos/consultas';
+import {
+  desdeTexto,
+  esNegativo,
+  esPositivo,
+  negar,
+  nombreMoneda,
+  type Moneda,
+} from '@/nucleo/dinero';
+import { ahora, formatearDiaCorto, hoy } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
+import { registrarManual } from '@/servicios/caja';
 
 const TIPO: Record<string, { etiqueta: string; icono: keyof typeof Ionicons.glyphMap }> = {
   cobro: { etiqueta: 'Cobro', icono: 'arrow-down' },
@@ -43,6 +54,7 @@ export default function PantallaCaja() {
   const { refrescar } = useBase();
 
   const saldos = useConsulta((db) => saldoDeCaja(db));
+  const iniciada = useConsulta((db) => cajaIniciada(db));
   const movimientos = useConsulta((db) => ultimosMovimientosDeCaja(db));
 
   useFocusEffect(useCallback(() => refrescar(), [refrescar]));
@@ -63,9 +75,7 @@ export default function PantallaCaja() {
       }>
       {saldos.cargando && saldos.datos === null ? <Cargando /> : null}
 
-      {saldos.datos !== null && conSaldo.length === 0 ? (
-        <Vacio titulo="Sin movimientos de caja" />
-      ) : null}
+      {iniciada.datos === false ? <CajaInicial alGuardar={iniciada.recargar} /> : null}
 
       {conSaldo.map((saldo) => (
         <TarjetaDestacada key={saldo.moneda}>
@@ -124,5 +134,71 @@ export default function PantallaCaja() {
         </Seccion>
       ) : null}
     </PantallaPrincipal>
+  );
+}
+
+/** La primera vez: con cuánta plata empezás. Sin esto, el primer préstamo deja la caja en negativo. */
+function CajaInicial({ alGuardar }: { alGuardar: () => void }) {
+  const tema = useTheme();
+  const { db, refrescar } = useBase();
+  const [moneda, setMoneda] = useState<Moneda>('BOB');
+  const [montoTexto, setMontoTexto] = useState('');
+  const [guardando, setGuardando] = useState(false);
+
+  const guardar = async () => {
+    let monto;
+    try {
+      monto = desdeTexto(montoTexto, moneda);
+    } catch {
+      monto = null;
+    }
+    if (!monto || !esPositivo(monto)) {
+      Alert.alert('Falta el monto', 'Escribí con cuánta plata empezás.');
+      return;
+    }
+    setGuardando(true);
+    try {
+      await enTransaccion(db, () =>
+        registrarManual(db, {
+          tipo: 'aporte',
+          monto,
+          fecha: hoy(),
+          detalle: 'Capital inicial',
+          ahora: ahora(),
+        }),
+      );
+      refrescar();
+      alGuardar();
+    } catch (problema) {
+      Alert.alert('No se pudo', problema instanceof Error ? problema.message : String(problema));
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <TarjetaDestacada>
+      <Texto variante="etiqueta" color={tema.primario}>
+        Para empezar
+      </Texto>
+      <Texto variante="subtitulo">¿Con cuánta plata empezás a prestar?</Texto>
+      <Opciones
+        etiqueta="Moneda"
+        valor={moneda}
+        onChange={setMoneda}
+        opciones={[
+          { valor: 'BOB', titulo: 'Bolivianos' },
+          { valor: 'USD', titulo: 'Dólares' },
+        ]}
+      />
+      <Campo
+        etiqueta="Monto"
+        valor={montoTexto}
+        onChange={setMontoTexto}
+        placeholder="10000"
+        teclado="decimal-pad"
+      />
+      <Boton titulo="Guardar" icono="checkmark-circle" cargando={guardando} onPress={guardar} />
+    </TarjetaDestacada>
   );
 }

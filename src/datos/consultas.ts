@@ -643,3 +643,18 @@ export async function deudaPorCliente(
   }
   return porCliente;
 }
+
+// --- Caja ------------------------------------------------------------------------------
+
+/**
+ * Si ya se dijo con cuánta plata se empezó: hay algún aporte o un arqueo. Sin eso, la caja
+ * arranca en cero y el primer préstamo la deja en negativo.
+ */
+export async function cajaIniciada(db: EjecutorSQL): Promise<boolean> {
+  const fila = await db.getFirstAsync<{ hay: number }>(
+    `SELECT EXISTS (
+       SELECT 1 FROM caja_movimientos WHERE tipo IN ('aporte', 'ajuste')
+     ) AS hay`,
+  );
+  return Number(fila?.hay ?? 0) === 1;
+}

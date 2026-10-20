@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { crearBaseDePrueba, type BaseDePrueba } from '../datos/baseDePrueba';
-import { saldoDeCaja } from '../datos/consultas';
+import { cajaIniciada, saldoDeCaja } from '../datos/consultas';
 import type { EjecutorSQL } from '../datos/ejecutor';
 import { crearCliente } from '../datos/repositorios/clientes';
 import type { Condiciones } from '../dominio/tipos';
@@ -277,5 +277,26 @@ describe('arqueo', () => {
         ahora: AHORA,
       }),
     ).rejects.toThrow(MovimientoDeCajaInvalidoError);
+  });
+});
+
+describe('caja inicial', () => {
+  it('no está iniciada hasta que se anota con cuánto se empieza', async () => {
+    expect(await cajaIniciada(db)).toBe(false);
+
+    // Un préstamo solo no la inicia: la deja en negativo.
+    const clienteId = await crearCliente(db, { nombre: 'Ana', ci: '1', telefono: '7' }, AHORA);
+    await desembolsar(db, { clienteId, condiciones, ahora: AHORA });
+    expect(await cajaIniciada(db)).toBe(false);
+
+    await registrarManual(db, {
+      tipo: 'aporte',
+      monto: desdeUnidades(10000, 'BOB'),
+      fecha: HOY,
+      detalle: 'Capital inicial',
+      ahora: AHORA,
+    });
+    expect(await cajaIniciada(db)).toBe(true);
+    expect(await saldoBs()).toBe('Bs 4.000,00');
   });
 });
