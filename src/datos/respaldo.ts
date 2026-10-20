@@ -14,7 +14,6 @@
  * la única copia buena es peor que no tener respaldo.
  */
 
-import * as DocumentPicker from 'expo-document-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as SQLite from 'expo-sqlite';
@@ -142,20 +141,22 @@ export async function exportarCartera(db: SQLite.SQLiteDatabase): Promise<File> 
   return archivo;
 }
 
-/** Abre el selector de archivos. Devuelve `null` si el usuario cancela. */
+/**
+ * Abre el selector de archivos. Devuelve `null` si el usuario cancela.
+ *
+ * Usa el selector de `expo-file-system`, que entrega el archivo con permiso de lectura. El de
+ * `expo-document-picker` copiaba el archivo a una carpeta que Expo Go no deja leer ("Missing
+ * READ permission"), y la restauración fallaba justo cuando más se la necesita.
+ */
 export async function elegirArchivoDeRespaldo(): Promise<{
   nombre: string;
   bytes: Uint8Array;
 } | null> {
-  const resultado = await DocumentPicker.getDocumentAsync({
-    type: '*/*',
-    copyToCacheDirectory: true,
-  });
-  if (resultado.canceled || !resultado.assets?.length) return null;
+  const resultado = await File.pickFileAsync({ mimeTypes: '*/*' });
+  if (resultado.canceled) return null;
 
-  const elegido = resultado.assets[0];
-  const archivo = new File(elegido.uri);
-  return { nombre: elegido.name, bytes: await archivo.bytes() };
+  const archivo = resultado.result;
+  return { nombre: archivo.name, bytes: await archivo.bytes() };
 }
 
 /**
