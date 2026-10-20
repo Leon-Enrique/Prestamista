@@ -20,6 +20,7 @@ import {
 import {
   RespaldoInvalidoError,
   restaurarContenido,
+  sinModoWal,
   validarContenido,
   type ResultadoRestauracion,
 } from './restaurar';
@@ -41,7 +42,7 @@ export async function restaurarDesdeBytes(
 ): Promise<ResultadoRestauracionCompleta> {
   let memoria: SQLite.SQLiteDatabase;
   try {
-    memoria = await SQLite.deserializeDatabaseAsync(bytes);
+    memoria = await SQLite.deserializeDatabaseAsync(sinModoWal(bytes));
   } catch {
     throw new RespaldoInvalidoError('El archivo no es una base de datos.');
   }

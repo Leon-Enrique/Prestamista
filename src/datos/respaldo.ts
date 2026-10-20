@@ -22,7 +22,7 @@ import { diasEntre, type Dia, type Instante } from '../nucleo/fechas';
 import { exportarCarteraACsv } from './cartera-csv';
 import type { Configuracion } from './repositorios/config';
 import { escribirConfiguracion } from './repositorios/config';
-import { validarContenido, type ValidacionRespaldo } from './restaurar';
+import { sinModoWal, validarContenido, type ValidacionRespaldo } from './restaurar';
 
 export const CARPETA_RESPALDOS = 'respaldos';
 export const RESPALDOS_A_CONSERVAR = 5;
@@ -91,7 +91,8 @@ export async function tomarRespaldo(
   db: SQLite.SQLiteDatabase,
   opciones: { etiqueta?: string; ahora?: Instante } = {},
 ): Promise<Respaldo> {
-  const datos = await db.serializeAsync();
+  // Sin la marca de WAL, el archivo se abre en cualquier lado, también en memoria al restaurar.
+  const datos = sinModoWal(await db.serializeAsync());
 
   const archivo = new File(carpetaDeRespaldos(), nombreDeRespaldo(new Date(), opciones.etiqueta));
   archivo.create({ overwrite: true });
@@ -167,7 +168,7 @@ export async function elegirArchivoDeRespaldo(): Promise<{
 export async function revisarRespaldo(bytes: Uint8Array): Promise<ValidacionRespaldo> {
   let memoria: SQLite.SQLiteDatabase;
   try {
-    memoria = await SQLite.deserializeDatabaseAsync(bytes);
+    memoria = await SQLite.deserializeDatabaseAsync(sinModoWal(bytes));
   } catch {
     return {
       valido: false,

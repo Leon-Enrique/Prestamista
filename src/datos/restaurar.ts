@@ -43,6 +43,24 @@ export type TablaRespaldo = (typeof TABLAS_RESPALDO)[number];
 export class RespaldoInvalidoError extends Error {}
 
 /**
+ * Quita la marca de modo WAL de una base serializada.
+ *
+ * La base viva trabaja en modo WAL, y `serializeAsync()` copia esa marca (bytes 18 y 19 de la
+ * cabecera en 2). Una base en memoria no puede trabajar en WAL: al abrir un respaldo así,
+ * SQLite responde "unable to open database file" y la restauración falla con un archivo que
+ * está perfecto. Ponerlos en 1 (modo normal) no cambia ningún dato.
+ *
+ * Devuelve una copia; no toca los bytes que recibe.
+ */
+export function sinModoWal(bytes: Uint8Array): Uint8Array {
+  if (bytes.length < 20 || bytes[18] !== 2 || bytes[19] !== 2) return bytes;
+  const copia = new Uint8Array(bytes);
+  copia[18] = 1;
+  copia[19] = 1;
+  return copia;
+}
+
+/**
  * Lo que SQLite devuelve y vuelve a aceptar como parámetro. Sin `bigint`: los montos van en
  * centavos y los identificadores son enteros chicos, así que nada se acerca a 2^53.
  */

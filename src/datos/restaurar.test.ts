@@ -7,6 +7,11 @@
  * operando sobre la cartera restaurada.
  */
 
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
+
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { resumenDeuda } from '../dominio/obligaciones';
@@ -23,6 +28,7 @@ import {
   copiarContenido,
   RespaldoInvalidoError,
   restaurarContenido,
+  sinModoWal,
   validarContenido,
 } from './restaurar';
 
@@ -251,5 +257,43 @@ describe('un respaldo de una versión anterior', () => {
     const clientes = await listarClientes(destino.db);
     expect(clientes[0].nombre).toBe('Juan Pérez');
     expect(clientes[0].referencias).toBeNull();
+  });
+});
+
+describe('respaldos de una base en modo WAL', () => {
+  it('quita la marca de WAL sin tocar el resto ni los bytes originales', () => {
+    const bytes = new Uint8Array(100).fill(7);
+    bytes[18] = 2;
+    bytes[19] = 2;
+    const limpio = sinModoWal(bytes);
+    expect([limpio[18], limpio[19]]).toEqual([1, 1]);
+    expect([bytes[18], bytes[19]]).toEqual([2, 2]);
+    expect(limpio[17]).toBe(7);
+    expect(limpio[20]).toBe(7);
+  });
+
+  it('deja igual lo que no está en modo WAL', () => {
+    const bytes = new Uint8Array(100);
+    bytes[18] = 1;
+    bytes[19] = 1;
+    expect(sinModoWal(bytes)).toBe(bytes);
+  });
+
+  it('una base real en WAL, sin la marca, se abre con sus datos', () => {
+    const carpeta = mkdtempSync(join(tmpdir(), 'prestamista-wal-'));
+    const original = join(carpeta, 'viva.db');
+    const viva = new DatabaseSync(original);
+    viva.exec("PRAGMA journal_mode = WAL; CREATE TABLE t (x TEXT); INSERT INTO t VALUES ('Ana');");
+    viva.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+    viva.close();
+
+    const bytes = new Uint8Array(readFileSync(original));
+    expect([bytes[18], bytes[19]]).toEqual([2, 2]);
+
+    const copia = join(carpeta, 'respaldo.db');
+    writeFileSync(copia, sinModoWal(bytes));
+    const abierta = new DatabaseSync(copia, { readOnly: true });
+    expect(abierta.prepare('SELECT x FROM t').get()).toEqual({ x: 'Ana' });
+    abierta.close();
   });
 });
