@@ -71,11 +71,11 @@ import { useBase, useConsulta } from '@/hooks/use-base';
 import { refinanciar } from '@/servicios/refinanciar';
 
 /**
- * Las formas de pago que se ofrecen. El dominio sabe calcular otras (solo interés, capital
+ * Las formas de pago que se ofrecen. El dominio sabe calcular otras (cuota fija, capital
  * fijo, pago único) y los préstamos ya hechos con ellas se siguen mostrando y cobrando; solo
  * no se ofrecen para préstamos nuevos.
  */
-const MODALIDADES: Modalidad[] = ['cuota_fija', 'interes_flat'];
+const MODALIDADES: Modalidad[] = ['solo_interes', 'interes_flat'];
 
 const NOMBRE_FRECUENCIA: Record<Frecuencia, string> = {
   diaria: 'días',
@@ -160,7 +160,7 @@ function Formulario({ datos }: { datos: DatosRefinanciacion }) {
   const [modalidad, setModalidad] = useState<Modalidad>(
     MODALIDADES.includes(prestamo.condiciones.modalidad)
       ? prestamo.condiciones.modalidad
-      : 'cuota_fija',
+      : 'solo_interes',
   );
   const [frecuencia, setFrecuencia] = useState<Frecuencia>(prestamo.condiciones.frecuencia);
   const [plazoTexto, setPlazoTexto] = useState(

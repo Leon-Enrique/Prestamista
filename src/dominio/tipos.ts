@@ -44,7 +44,7 @@ export function familiaDe(modalidad: Modalidad): Familia {
 }
 
 export const ETIQUETA_MODALIDAD: Record<Modalidad, string> = {
-  solo_interes: 'Solo interés',
+  solo_interes: 'Paga como puede',
   cuota_fija: 'Cuota fija',
   capital_fijo: 'Capital fijo',
   interes_flat: 'Interés fijo',
