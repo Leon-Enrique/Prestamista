@@ -32,7 +32,6 @@ import { listarClientes } from '@/datos/repositorios/clientes';
 import { leerConfiguracion, reglasMoraDe } from '@/datos/repositorios/config';
 import {
   generarCronograma,
-  proyectarSoloInteres,
   resumenCronograma,
 } from '@/dominio/cronograma';
 import {
@@ -62,13 +61,12 @@ import { useTheme } from '@/hooks/use-theme';
 import { desembolsar } from '@/servicios/desembolsar';
 import { devengar } from '@/servicios/devengar';
 
-const MODALIDADES: Modalidad[] = [
-  'solo_interes',
-  'cuota_fija',
-  'interes_flat',
-  'capital_fijo',
-  'pago_unico',
-];
+/**
+ * Las formas de pago que se ofrecen. El dominio sabe calcular otras (solo interés, capital
+ * fijo, pago único) y los préstamos ya hechos con ellas se siguen mostrando y cobrando; solo
+ * no se ofrecen para préstamos nuevos.
+ */
+const MODALIDADES: Modalidad[] = ['cuota_fija', 'interes_flat'];
 
 const PERIODO_DE_FRECUENCIA: Record<Frecuencia, PeriodoTasa> = {
   diaria: 'diario',
@@ -98,10 +96,9 @@ export default function PantallaNuevoPrestamo() {
   const [tasaTexto, setTasaTexto] = useState('10');
   // 'total' = el porcentaje es de todo el préstamo, repartido en las cuotas.
   const [periodoTasa, setPeriodoTasa] = useState<PeriodoTasa | 'total'>('mensual');
-  const [modalidad, setModalidad] = useState<Modalidad>('solo_interes');
+  const [modalidad, setModalidad] = useState<Modalidad>('cuota_fija');
   const [frecuencia, setFrecuencia] = useState<Frecuencia>('mensual');
   const [plazoTexto, setPlazoTexto] = useState('6');
-  const [capitalConFecha, setCapitalConFecha] = useState(true);
   // La fecha de entrega arranca en hoy; se cambia para cargar préstamos ya entregados.
   const [entrega, setEntrega] = useState<Dia>(hoyDia);
   // Por defecto no se cobra penalización: el usuario la activa préstamo por préstamo.
@@ -111,11 +108,9 @@ export default function PantallaNuevoPrestamo() {
   const [guardando, setGuardando] = useState(false);
 
   const clientes = useConsulta((base) => listarClientes(base));
-  const esAbierto = modalidad === 'solo_interes';
-  const permiteTasaTotal = modalidad === 'interes_flat' || modalidad === 'pago_unico';
-  const sinFecha = esAbierto && !capitalConFecha;
-  // Sin fecha de capital no hay plazo que pedir: la proyección muestra un solo período.
-  const plazo = sinFecha ? 1 : Number(plazoTexto);
+  // "10% del total" solo tiene sentido con interés sobre lo prestado.
+  const permiteTasaTotal = modalidad === 'interes_flat';
+  const plazo = Number(plazoTexto);
 
   const dia = entrega;
 
@@ -137,9 +132,9 @@ export default function PantallaNuevoPrestamo() {
             : tasaDesdePorcentaje(porcentaje, periodoTasa),
         modalidad,
         frecuencia,
-        cantidadPeriodos: esAbierto ? null : plazo,
+        cantidadPeriodos: plazo,
         fechaDesembolso: dia,
-        vencimientoCapital: !esAbierto || capitalConFecha ? ultimoVencimiento : null,
+        vencimientoCapital: ultimoVencimiento,
       };
     } catch {
       return null;
@@ -153,21 +148,17 @@ export default function PantallaNuevoPrestamo() {
     frecuencia,
     plazo,
     dia,
-    esAbierto,
-    capitalConFecha,
   ]);
 
   const vista = useMemo(() => {
     if (!condiciones) return null;
     try {
-      const lineas = esAbierto
-        ? proyectarSoloInteres(condiciones, plazo)
-        : generarCronograma(condiciones);
+      const lineas = generarCronograma(condiciones);
       return { lineas, resumen: resumenCronograma(lineas) };
     } catch {
       return null;
     }
-  }, [condiciones, esAbierto, plazo]);
+  }, [condiciones]);
 
   const desembolsarAhora = async () => {
     if (!clienteId || !condiciones) return;
@@ -292,8 +283,8 @@ export default function PantallaNuevoPrestamo() {
               valor={modalidad}
               onChange={(nueva) => {
                 setModalidad(nueva);
-                // "10% del préstamo" solo tiene sentido con interés sobre lo prestado o pago único.
-                if (nueva === 'interes_flat' || nueva === 'pago_unico') setPeriodoTasa('total');
+                // "10% del préstamo" solo tiene sentido con interés sobre lo prestado.
+                if (nueva === 'interes_flat') setPeriodoTasa('total');
                 else if (periodoTasa === 'total') setPeriodoTasa('mensual');
               }}
               opciones={MODALIDADES.map((valor) => ({
@@ -312,85 +303,36 @@ export default function PantallaNuevoPrestamo() {
                 { valor: 'mensual', titulo: 'Mes' },
               ]}
             />
-            {sinFecha ? null : (
-              <Campo
-                etiqueta={
-                  esAbierto
-                    ? `Devuelve el capital en (${NOMBRE_FRECUENCIA[frecuencia]})`
-                    : `Cuotas`
-                }
-                valor={plazoTexto}
-                onChange={(valor) => setPlazoTexto(valor.replace(/\D/g, ''))}
-                teclado="numeric"
-              />
-            )}
-
-            {esAbierto ? (
-              <Opciones
-                etiqueta="Fecha para el capital"
-                valor={capitalConFecha ? 'con' : 'sin'}
-                onChange={(valor) => setCapitalConFecha(valor === 'con')}
-                opciones={[
-                  { valor: 'con', titulo: 'Con fecha' },
-                  { valor: 'sin', titulo: 'Sin fecha' },
-                ]}
-              />
-            ) : null}
+            <Campo
+              etiqueta={`Cuotas (${NOMBRE_FRECUENCIA[frecuencia]})`}
+              valor={plazoTexto}
+              onChange={(valor) => setPlazoTexto(valor.replace(/\D/g, ''))}
+              teclado="numeric"
+            />
           </Seccion>
 
           {vista ? (
             <TarjetaDestacada>
-              {esAbierto ? (
-                <>
-                  <Texto variante="etiqueta" color={tema.alDia}>
-                    Interés por {NOMBRE_FRECUENCIA[frecuencia].slice(0, -1)}
-                  </Texto>
-                  <Monto valor={vista.lineas[0].interes} variante="titulo" />
-                  <Dato etiqueta="Capital">
-                    <Monto valor={condiciones!.capital} />
-                  </Dato>
-                  {sinFecha ? null : (
-                    <>
-                      <Dato etiqueta={`Ganás en ${plazo} ${NOMBRE_FRECUENCIA[frecuencia]}`}>
-                        <Monto valor={vista.resumen.totalInteres} color={tema.alDia} />
-                      </Dato>
-                      <Dato etiqueta="Te devuelve">
-                        <Monto valor={vista.resumen.totalAPagar} variante="subtitulo" />
-                      </Dato>
-                    </>
-                  )}
-                  {capitalConFecha ? (
-                    <Dato etiqueta="Capital vence">
-                      <Texto>
-                        {formatearDiaCorto(vista.lineas[vista.lineas.length - 1].vencimiento)}
-                      </Texto>
-                    </Dato>
-                  ) : null}
-                </>
-              ) : (
-                <>
-                  <Texto variante="etiqueta" color={tema.alDia}>
-                    {vista.lineas.length === 1 ? 'Un pago de' : `${vista.lineas.length} cuotas de`}
-                  </Texto>
-                  <Monto valor={vista.resumen.cuotaMaxima} variante="titulo" />
-                  {vista.resumen.cuotaMinima.centavos !== vista.resumen.cuotaMaxima.centavos ? (
-                    <Texto variante="suave" suave>
-                      baja hasta {formatear(vista.resumen.cuotaMinima)}
-                    </Texto>
-                  ) : null}
-                  <Dato etiqueta="Ganás">
-                    <Monto valor={vista.resumen.totalInteres} color={tema.alDia} />
-                  </Dato>
-                  <Dato etiqueta="Te devuelve">
-                    <Monto valor={vista.resumen.totalAPagar} variante="subtitulo" />
-                  </Dato>
-                  <Dato etiqueta="Última cuota">
-                    <Texto>
-                      {formatearDiaCorto(vista.lineas[vista.lineas.length - 1].vencimiento)}
-                    </Texto>
-                  </Dato>
-                </>
-              )}
+              <Texto variante="etiqueta" color={tema.alDia}>
+                {vista.lineas.length === 1 ? 'Un pago de' : `${vista.lineas.length} cuotas de`}
+              </Texto>
+              <Monto valor={vista.resumen.cuotaMaxima} variante="titulo" />
+              {vista.resumen.cuotaMinima.centavos !== vista.resumen.cuotaMaxima.centavos ? (
+                <Texto variante="suave" suave>
+                  baja hasta {formatear(vista.resumen.cuotaMinima)}
+                </Texto>
+              ) : null}
+              <Dato etiqueta="Ganás">
+                <Monto valor={vista.resumen.totalInteres} color={tema.alDia} />
+              </Dato>
+              <Dato etiqueta="Te devuelve">
+                <Monto valor={vista.resumen.totalAPagar} variante="subtitulo" />
+              </Dato>
+              <Dato etiqueta="Última cuota">
+                <Texto>
+                  {formatearDiaCorto(vista.lineas[vista.lineas.length - 1].vencimiento)}
+                </Texto>
+              </Dato>
             </TarjetaDestacada>
           ) : capitalTexto.trim() ? (
             <Aviso tono="peligro">Revisá el monto, la tasa y el plazo.</Aviso>

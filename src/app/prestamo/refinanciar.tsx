@@ -70,13 +70,12 @@ import {
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { refinanciar } from '@/servicios/refinanciar';
 
-const MODALIDADES: Modalidad[] = [
-  'solo_interes',
-  'cuota_fija',
-  'interes_flat',
-  'capital_fijo',
-  'pago_unico',
-];
+/**
+ * Las formas de pago que se ofrecen. El dominio sabe calcular otras (solo interés, capital
+ * fijo, pago único) y los préstamos ya hechos con ellas se siguen mostrando y cobrando; solo
+ * no se ofrecen para préstamos nuevos.
+ */
+const MODALIDADES: Modalidad[] = ['cuota_fija', 'interes_flat'];
 
 const NOMBRE_FRECUENCIA: Record<Frecuencia, string> = {
   diaria: 'días',
@@ -157,7 +156,12 @@ function Formulario({ datos }: { datos: DatosRefinanciacion }) {
   const [tasaTexto, setTasaTexto] = useState(() =>
     porcentajeDeTasa(prestamo.condiciones.tasa).toString().replace('.', ','),
   );
-  const [modalidad, setModalidad] = useState<Modalidad>(prestamo.condiciones.modalidad);
+  // Un préstamo viejo de otra modalidad se refinancia a una de las que se ofrecen.
+  const [modalidad, setModalidad] = useState<Modalidad>(
+    MODALIDADES.includes(prestamo.condiciones.modalidad)
+      ? prestamo.condiciones.modalidad
+      : 'cuota_fija',
+  );
   const [frecuencia, setFrecuencia] = useState<Frecuencia>(prestamo.condiciones.frecuencia);
   const [plazoTexto, setPlazoTexto] = useState(
     String(prestamo.condiciones.cantidadPeriodos ?? 6),
