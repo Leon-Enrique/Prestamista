@@ -3,7 +3,13 @@ import { describe, expect, it } from 'vitest';
 import { desdeUnidades, formatear, type Moneda } from '../nucleo/dinero';
 import { MonedaIncompatibleError, MontoInvalidoError } from '../nucleo/errores';
 import { dia } from '../nucleo/fechas';
-import { desgloseDeImputacion, imputarPago, totalParaSaldar } from './imputacion';
+import {
+  desgloseDeImputacion,
+  imputarConReparto,
+  imputarPago,
+  pendientePorComponente,
+  totalParaSaldar,
+} from './imputacion';
 import { estadoSegunSaldo } from './obligaciones';
 import type { Obligacion, TipoObligacion } from './tipos';
 
@@ -284,5 +290,70 @@ describe('validaciones', () => {
     expect(resultado.imputaciones).toHaveLength(1);
     expect(resultado.imputaciones[0].obligacionId).toBe(61);
     expect(resultado.imputaciones[0].componente).toBe('interes');
+  });
+});
+
+describe('reparto elegido por el usuario', () => {
+  const bs = (n: number) => desdeUnidades(n, 'BOB');
+  const reparto = (interes: number, capital: number, mora = 0) => ({
+    interes: bs(interes),
+    capital: bs(capital),
+    mora: bs(mora),
+  });
+
+  it('todo a capital aunque haya interés pendiente', () => {
+    const r = imputarConReparto({ reparto: reparto(0, 500), obligaciones: carteraDeJuan(), hasta: HOY });
+    const d = desgloseDeImputacion(r, 'BOB');
+    expect(formatear(d.capital)).toBe('Bs 500,00');
+    expect(formatear(d.interes)).toBe('Bs 0,00');
+    expect(formatear(d.mora)).toBe('Bs 0,00');
+    expect(r.imputaciones).toEqual([
+      expect.objectContaining({ obligacionId: 3, componente: 'capital' }),
+    ]);
+  });
+
+  it('una parte a interés y otra a capital', () => {
+    const r = imputarConReparto({
+      reparto: reparto(300, 1000),
+      obligaciones: carteraDeJuan(),
+      hasta: HOY,
+    });
+    const d = desgloseDeImputacion(r, 'BOB');
+    expect(formatear(d.interes)).toBe('Bs 300,00');
+    expect(formatear(d.capital)).toBe('Bs 1.000,00');
+    expect(formatear(r.aplicado)).toBe('Bs 1.300,00');
+  });
+
+  it('no deja cobrar más interés del que hay pendiente', () => {
+    expect(() =>
+      imputarConReparto({ reparto: reparto(700, 0), obligaciones: carteraDeJuan(), hasta: HOY }),
+    ).toThrow(/máximo es Bs 600,00/);
+  });
+
+  it('no acepta un pago en cero', () => {
+    expect(() =>
+      imputarConReparto({ reparto: reparto(0, 0), obligaciones: carteraDeJuan(), hasta: HOY }),
+    ).toThrow(MontoInvalidoError);
+  });
+
+  it('en cuotas, el capital va a la cuota más vieja primero', () => {
+    const cuotas = [
+      ob({ id: 1, tipo: 'cuota', numero: 1, vencimiento: '2026-10-01', capital: 500, interes: 200 }),
+      ob({ id: 2, tipo: 'cuota', numero: 2, vencimiento: '2026-11-01', capital: 500, interes: 200 }),
+    ];
+    const r = imputarConReparto({ reparto: reparto(0, 700), obligaciones: cuotas, hasta: HOY });
+    expect(r.imputaciones.map((i) => [i.obligacionId, i.componente, formatear(i.monto)])).toEqual([
+      [1, 'capital', 'Bs 500,00'],
+      [2, 'capital', 'Bs 200,00'],
+    ]);
+  });
+
+  it('dice cuánto hay pendiente de cada cosa', () => {
+    const p = pendientePorComponente(carteraDeJuan(), 'BOB');
+    expect([formatear(p.mora), formatear(p.interes), formatear(p.capital)]).toEqual([
+      'Bs 21,00',
+      'Bs 600,00',
+      'Bs 6.000,00',
+    ]);
   });
 });

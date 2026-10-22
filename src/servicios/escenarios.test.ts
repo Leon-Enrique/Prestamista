@@ -324,3 +324,86 @@ describe('10% mensual en cuotas semanales: 4 semanas son un mes', () => {
     expect(formatear(resumen!.totalAPagar)).toBe('Bs 880,00');
   });
 });
+
+describe('cobro con el reparto elegido', () => {
+  const bs = (n: number) => desdeUnidades(n, 'BOB');
+
+  async function pagaComoPuede() {
+    const { prestamoId } = await desembolsar(db, {
+      clienteId,
+      condiciones: { ...condiciones('solo_interes'), vencimientoCapital: null },
+      reglasMora: REGLAS_SIN_PENALIZACION,
+      ahora: AHORA,
+    });
+    await devengar(db, { hoy: dia('2026-11-09'), ahora: AHORA });
+    return prestamoId;
+  }
+
+  it('solo capital: el interés queda pendiente y el próximo interés baja', async () => {
+    const prestamoId = await pagaComoPuede();
+    const r = await cobrar(db, {
+      prestamoId,
+      monto: bs(500),
+      reparto: { interes: bs(0), capital: bs(500), mora: bs(0) },
+      fecha: dia('2026-11-09'),
+      medio: 'efectivo',
+      ahora: AHORA,
+    });
+    expect(formatear(r.desglose.capital)).toBe('Bs 500,00');
+    expect(formatear(r.desglose.interes)).toBe('Bs 0,00');
+
+    const deuda = resumenDeuda(await obligacionesDePrestamo(db, prestamoId), 'BOB', dia('2026-11-09'));
+    expect(formatear(deuda.interes)).toBe('Bs 200,00');
+    expect(formatear(deuda.capital)).toBe('Bs 1.500,00');
+
+    await devengar(db, { hoy: dia('2026-12-09'), ahora: AHORA });
+    const intereses = (await obligacionesDePrestamo(db, prestamoId)).filter((o) => o.tipo === 'interes');
+    expect(formatear(intereses[intereses.length - 1].interes)).toBe('Bs 150,00');
+    expect((await verificar(db)).cuadra).toBe(true);
+  });
+
+  it('al día siguiente, lo que paga va todo a capital sin elegir nada', async () => {
+    const prestamoId = await pagaComoPuede();
+    await cobrar(db, { prestamoId, monto: bs(200), fecha: dia('2026-11-09'), medio: 'efectivo', ahora: AHORA });
+    const manana = await cobrar(db, {
+      prestamoId,
+      monto: bs(300),
+      fecha: dia('2026-11-10'),
+      medio: 'efectivo',
+      ahora: AHORA,
+    });
+    expect(formatear(manana.desglose.capital)).toBe('Bs 300,00');
+    expect(formatear(manana.desglose.interes)).toBe('Bs 0,00');
+  });
+
+  it('el reparto tiene que sumar el monto del pago', async () => {
+    const prestamoId = await pagaComoPuede();
+    await expect(
+      cobrar(db, {
+        prestamoId,
+        monto: bs(600),
+        reparto: { interes: bs(100), capital: bs(400), mora: bs(0) },
+        fecha: dia('2026-11-09'),
+        medio: 'efectivo',
+        ahora: AHORA,
+      }),
+    ).rejects.toThrow(/suma Bs 500,00/);
+  });
+
+  it('anular un cobro con reparto elegido deja todo como estaba', async () => {
+    const prestamoId = await pagaComoPuede();
+    const antes = resumenDeuda(await obligacionesDePrestamo(db, prestamoId), 'BOB', dia('2026-11-09'));
+    const r = await cobrar(db, {
+      prestamoId,
+      monto: bs(700),
+      reparto: { interes: bs(100), capital: bs(600), mora: bs(0) },
+      fecha: dia('2026-11-09'),
+      medio: 'efectivo',
+      ahora: AHORA,
+    });
+    await revertirPago(db, { pagoId: r.pagoId, motivo: 'Error', fecha: dia('2026-11-09'), ahora: AHORA });
+    const despues = resumenDeuda(await obligacionesDePrestamo(db, prestamoId), 'BOB', dia('2026-11-09'));
+    expect(formatear(despues.total)).toBe(formatear(antes.total));
+    expect((await verificar(db)).cuadra).toBe(true);
+  });
+});

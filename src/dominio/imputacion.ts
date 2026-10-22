@@ -20,7 +20,7 @@
  * pagué", el libro lo puede demostrar.
  */
 
-import { cero, dinero, esPositivo, restar, sumar, type Dinero } from '../nucleo/dinero';
+import { cero, dinero, esPositivo, formatear, restar, sumar, type Dinero } from '../nucleo/dinero';
 import { MonedaIncompatibleError, MontoInvalidoError } from '../nucleo/errores';
 import type { Dia } from '../nucleo/fechas';
 import { estaCobrable, estaVencida, saldoDe } from './obligaciones';
@@ -156,3 +156,88 @@ export function desgloseDeImputacion(
     capital: porComponente('capital'),
   };
 }
+
+// --- Reparto elegido -------------------------------------------------------------------
+
+/** Cuánto de un pago va a cada componente, cuando lo decide el usuario. */
+export type Reparto = Readonly<Record<Componente, Dinero>>;
+
+/** Lo máximo que se puede cobrar de cada componente: lo que hay pendiente. */
+export function pendientePorComponente(
+  obligaciones: readonly Obligacion[],
+  moneda: Dinero['moneda'],
+): Reparto {
+  const cobrables = obligaciones.filter(estaCobrable);
+  const total = (componente: Componente): Dinero =>
+    sumar(cero(moneda), ...cobrables.map((o) => saldoDe(o, componente)));
+  return { mora: total('mora'), interes: total('interes'), capital: total('capital') };
+}
+
+/**
+ * Imputa un pago con el reparto que eligió el usuario: "estos 500 van todos a capital",
+ * aunque haya interés pendiente.
+ *
+ * Cada componente se aplica igual que en el reparto recomendado: obligación por obligación,
+ * lo vencido antes que lo corriente y lo más viejo primero. No se puede cobrar de un
+ * componente más de lo que hay pendiente; en particular, no existe cobrar el interés de un
+ * período que todavía no transcurrió.
+ */
+export function imputarConReparto(params: {
+  reparto: Reparto;
+  obligaciones: readonly Obligacion[];
+  hasta: Dia;
+}): ResultadoImputacion {
+  const { reparto, obligaciones, hasta } = params;
+  const moneda = reparto.capital.moneda;
+  const componentes: readonly Componente[] = ['mora', 'interes', 'capital'];
+
+  if (componentes.some((c) => reparto[c].moneda !== moneda)) {
+    throw new MonedaIncompatibleError('Todas las partes del reparto van en la misma moneda.');
+  }
+  if (componentes.some((c) => reparto[c].centavos < 0)) {
+    throw new MontoInvalidoError('Ninguna parte del reparto puede ser negativa.');
+  }
+  const total = sumar(...componentes.map((c) => reparto[c]));
+  if (!esPositivo(total)) {
+    throw new MontoInvalidoError('Un pago debe ser mayor a cero.');
+  }
+  const distinta = obligaciones.find((o) => o.moneda !== moneda);
+  if (distinta) {
+    throw new MonedaIncompatibleError(
+      `El pago es en ${moneda} y la obligación ${distinta.id} está en ${distinta.moneda}.`,
+    );
+  }
+
+  const cobrables = ordenarParaCobro(obligaciones.filter(estaCobrable));
+  const ordenadas = [
+    ...cobrables.filter((o) => estaVencida(o, hasta)),
+    ...cobrables.filter((o) => !estaVencida(o, hasta)),
+  ];
+
+  const imputaciones: Imputacion[] = [];
+  for (const componente of componentes) {
+    let restante = reparto[componente].centavos;
+    for (const obligacion of ordenadas) {
+      if (restante <= 0) break;
+      const saldo = saldoDe(obligacion, componente).centavos;
+      if (saldo <= 0) continue;
+      const aAplicar = Math.min(restante, saldo);
+      imputaciones.push({ obligacionId: obligacion.id, componente, monto: dinero(aAplicar, moneda) });
+      restante -= aAplicar;
+    }
+    if (restante > 0) {
+      const maximo = pendientePorComponente(obligaciones, moneda)[componente];
+      throw new MontoInvalidoError(
+        `No hay tanto ${NOMBRE_COMPONENTE[componente]} por cobrar: el máximo es ${formatear(maximo)}.`,
+      );
+    }
+  }
+
+  return { imputaciones, aplicado: total, sobrante: cero(moneda) };
+}
+
+const NOMBRE_COMPONENTE: Record<Componente, string> = {
+  mora: 'penalización',
+  interes: 'interés',
+  capital: 'capital',
+};

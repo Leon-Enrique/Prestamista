@@ -9,10 +9,16 @@
  * deriva de ellas. Así, cuando alguien dice "yo te pagué", el libro lo puede demostrar.
  */
 
-import { desgloseDeImputacion, imputarPago, type Imputacion } from '../dominio/imputacion';
+import {
+  desgloseDeImputacion,
+  imputarConReparto,
+  imputarPago,
+  type Imputacion,
+  type Reparto,
+} from '../dominio/imputacion';
 import type { Componente, MedioPago } from '../dominio/tipos';
-import { esPositivo, type Dinero } from '../nucleo/dinero';
-import { PrestamoNoActivoError, SinDeudaError } from '../nucleo/errores';
+import { esPositivo, formatear, type Dinero } from '../nucleo/dinero';
+import { MontoInvalidoError, PrestamoNoActivoError, SinDeudaError } from '../nucleo/errores';
 import type { Dia, Instante } from '../nucleo/fechas';
 import type { EjecutorSQL } from '../datos/ejecutor';
 import { leerConfiguracion, ordenComponentesDe } from '../datos/repositorios/config';
@@ -31,6 +37,11 @@ export type ParametrosCobro = {
   readonly nota?: string | null;
   /** Para imputar en un orden distinto al configurado, en un pago puntual. */
   readonly componentes?: readonly Componente[];
+  /**
+   * El reparto que eligió el usuario ("todo a capital"). Si viene, manda sobre el orden de
+   * componentes, y tiene que sumar exactamente el monto.
+   */
+  readonly reparto?: Reparto;
   readonly autor?: string;
   readonly ahora: Instante;
 };
@@ -62,14 +73,28 @@ export async function cobrar(
 
   const configuracion = await leerConfiguracion(db);
   const componentes = params.componentes ?? ordenComponentesDe(configuracion);
-  const imputacionManual = params.componentes !== undefined;
+  const imputacionManual = params.componentes !== undefined || params.reparto !== undefined;
 
-  const resultado = imputarPago({
-    monto: params.monto,
-    obligaciones,
-    hasta: params.fecha,
-    componentes,
-  });
+  let resultado;
+  if (params.reparto) {
+    resultado = imputarConReparto({
+      reparto: params.reparto,
+      obligaciones,
+      hasta: params.fecha,
+    });
+    if (resultado.aplicado.centavos !== params.monto.centavos) {
+      throw new MontoInvalidoError(
+        `El reparto suma ${formatear(resultado.aplicado)} y el pago es de ${formatear(params.monto)}.`,
+      );
+    }
+  } else {
+    resultado = imputarPago({
+      monto: params.monto,
+      obligaciones,
+      hasta: params.fecha,
+      componentes,
+    });
+  }
 
   const moneda = params.monto.moneda;
   const desglose = desgloseDeImputacion(resultado, moneda);

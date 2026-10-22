@@ -39,12 +39,18 @@ import {
 import { obtenerCliente } from '@/datos/repositorios/clientes';
 import { obligacionesCobrablesDePrestamo } from '@/datos/repositorios/obligaciones';
 import { obtenerPrestamo } from '@/datos/repositorios/prestamos';
-import { desgloseDeImputacion, imputarPago, totalParaSaldar } from '@/dominio/imputacion';
+import {
+  desgloseDeImputacion,
+  imputarConReparto,
+  imputarPago,
+  pendientePorComponente,
+  totalParaSaldar,
+} from '@/dominio/imputacion';
 import { aNumeroDeWhatsApp, mensajeDeRecibo } from '@/dominio/mensajes';
 import { resumenDeuda } from '@/dominio/obligaciones';
 import { MEDIOS_DE_PAGO, type MedioPago } from '@/dominio/tipos';
 import { enviarPorWhatsApp } from '@/nucleo/compartir';
-import { desdeTexto, esPositivo, formatear, restar, sumar, type Dinero } from '@/nucleo/dinero';
+import { cero, desdeTexto, esPositivo, formatear, restar, sumar, type Dinero } from '@/nucleo/dinero';
 import { ahora, hoy, type Dia } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
@@ -81,6 +87,11 @@ export default function PantallaCobrar() {
   );
 
   const [montoTexto, setMontoTexto] = useState('');
+  // "elegido": el usuario dice cuánto va a interés y cuánto a capital.
+  const [modo, setModo] = useState<'recomendado' | 'elegido'>('recomendado');
+  const [interesTexto, setInteresTexto] = useState('');
+  const [capitalTexto, setCapitalTexto] = useState('');
+  const [moraTexto, setMoraTexto] = useState('');
   const [medio, setMedio] = useState<MedioPago>('efectivo');
   const [nota, setNota] = useState('');
   const [guardando, setGuardando] = useState(false);
@@ -118,14 +129,81 @@ export default function PantallaCobrar() {
     }
   }, [datos.datos, montoTexto, moneda, dia]);
 
+  const pendiente = useMemo(
+    () => (datos.datos ? pendientePorComponente(datos.datos.obligaciones, moneda) : null),
+    [datos.datos, moneda],
+  );
+
+  // El reparto elegido: cada campo vacío cuenta como cero.
+  const elegida = useMemo(() => {
+    if (!datos.datos || modo !== 'elegido') return null;
+    const leer = (texto: string): Dinero | null => {
+      if (!texto.trim()) return cero(moneda);
+      try {
+        return desdeTexto(texto, moneda);
+      } catch {
+        return null;
+      }
+    };
+    const interes = leer(interesTexto);
+    const capital = leer(capitalTexto);
+    const mora = leer(moraTexto);
+    if (!interes || !capital || !mora) return { error: 'Revisá los montos.' };
+    try {
+      const resultado = imputarConReparto({
+        reparto: { interes, capital, mora },
+        obligaciones: datos.datos.obligaciones,
+        hasta: dia,
+      });
+      return {
+        vista: {
+          monto: resultado.aplicado,
+          resultado,
+          desglose: desgloseDeImputacion(resultado, moneda),
+          reparto: { interes, capital, mora },
+        },
+      };
+    } catch (problema) {
+      const total = sumar(interes, capital, mora);
+      return esPositivo(total)
+        ? { error: problema instanceof Error ? problema.message : String(problema) }
+        : null;
+    }
+  }, [datos.datos, modo, interesTexto, capitalTexto, moraTexto, moneda, dia]);
+
+  const activa = modo === 'elegido' ? (elegida?.vista ?? null) : vista;
+
+  /** Pasa a "lo elijo yo" con el reparto recomendado de lo que ya se escribió. */
+  const elegirReparto = (nuevo: 'recomendado' | 'elegido') => {
+    if (nuevo === 'elegido' && vista) {
+      const texto = (d: Dinero) => (esPositivo(d) ? formatear(d, { sinSimbolo: true }) : '');
+      setInteresTexto(texto(vista.desglose.interes));
+      setCapitalTexto(texto(vista.desglose.capital));
+      setMoraTexto(texto(vista.desglose.mora));
+    }
+    if (nuevo === 'recomendado' && elegida?.vista) {
+      setMontoTexto(formatear(elegida.vista.monto, { sinSimbolo: true }));
+    }
+    setModo(nuevo);
+  };
+
+  /** Todo lo que se escribió pasa a capital. */
+  const soloCapital = () => {
+    const total = elegida?.vista?.monto ?? vista?.monto ?? null;
+    setInteresTexto('');
+    setMoraTexto('');
+    if (total) setCapitalTexto(formatear(total, { sinSimbolo: true }));
+  };
+
   const confirmar = async () => {
-    if (!vista) return;
+    if (!activa) return;
     setGuardando(true);
     try {
       const resultado = await enTransaccion(db, () =>
         cobrar(db, {
           prestamoId,
-          monto: vista.monto,
+          monto: activa.monto,
+          reparto: modo === 'elegido' && elegida?.vista ? elegida.vista.reparto : undefined,
           fecha: dia,
           medio,
           nota,
@@ -216,21 +294,63 @@ export default function PantallaCobrar() {
       ) : null}
 
       <Seccion titulo="Cuánto paga">
-        <Campo
-          etiqueta="Monto"
-          valor={montoTexto}
-          onChange={setMontoTexto}
-          placeholder="0"
-          teclado="decimal-pad"
-          autoFocus
+        <Opciones
+          etiqueta="Reparto"
+          valor={modo}
+          onChange={elegirReparto}
+          opciones={[
+            { valor: 'recomendado', titulo: 'Recomendado' },
+            { valor: 'elegido', titulo: 'Lo elijo yo' },
+          ]}
         />
-        {aSaldar && esPositivo(aSaldar) ? (
-          <Boton
-            titulo={`Todo: ${formatear(aSaldar)}`}
-            variante="secundario"
-            onPress={() => setMontoTexto(formatear(aSaldar, { sinSimbolo: true }))}
-          />
-        ) : null}
+
+        {modo === 'recomendado' ? (
+          <>
+            <Campo
+              etiqueta="Monto"
+              valor={montoTexto}
+              onChange={setMontoTexto}
+              placeholder="0"
+              teclado="decimal-pad"
+              autoFocus
+            />
+            {aSaldar && esPositivo(aSaldar) ? (
+              <Boton
+                titulo={`Todo: ${formatear(aSaldar)}`}
+                variante="secundario"
+                onPress={() => setMontoTexto(formatear(aSaldar, { sinSimbolo: true }))}
+              />
+            ) : null}
+          </>
+        ) : (
+          <>
+            {pendiente && esPositivo(pendiente.mora) ? (
+              <Campo
+                etiqueta="A penalización"
+                valor={moraTexto}
+                onChange={setMoraTexto}
+                placeholder={`Hasta ${formatear(pendiente.mora)}`}
+                teclado="decimal-pad"
+              />
+            ) : null}
+            <Campo
+              etiqueta="A interés"
+              valor={interesTexto}
+              onChange={setInteresTexto}
+              placeholder={pendiente ? `Hasta ${formatear(pendiente.interes)}` : '0'}
+              teclado="decimal-pad"
+            />
+            <Campo
+              etiqueta="A capital"
+              valor={capitalTexto}
+              onChange={setCapitalTexto}
+              placeholder={pendiente ? `Hasta ${formatear(pendiente.capital)}` : '0'}
+              teclado="decimal-pad"
+            />
+            <Boton titulo="Solo capital" variante="secundario" icono="arrow-undo" onPress={soloCapital} />
+            {elegida?.error ? <Aviso tono="peligro">{elegida.error}</Aviso> : null}
+          </>
+        )}
 
         <Opciones
           etiqueta="Medio"
@@ -240,32 +360,32 @@ export default function PantallaCobrar() {
         />
       </Seccion>
 
-      {vista ? (
-        <Seccion titulo="Se reparte así">
+      {activa ? (
+        <Seccion titulo={`Paga ${formatear(activa.monto)}`}>
           <Tarjeta>
             <Fila>
               <CuadroIcono
                 icono="trending-up"
                 color={tema.alDia}
                 etiqueta="Interés (ganancia)"
-                valor={formatear(sumar(vista.desglose.interes, vista.desglose.mora))}
+                valor={formatear(sumar(activa.desglose.interes, activa.desglose.mora))}
               />
               <View style={[estilos.divisor, { backgroundColor: tema.borde }]} />
               <CuadroIcono
                 icono="arrow-undo"
                 color={tema.primario}
                 etiqueta="Capital"
-                valor={formatear(vista.desglose.capital)}
+                valor={formatear(activa.desglose.capital)}
               />
             </Fila>
-            {esPositivo(vista.desglose.mora) ? (
+            {esPositivo(activa.desglose.mora) ? (
               <Dato etiqueta="de eso, penalización">
-                <Monto valor={vista.desglose.mora} />
+                <Monto valor={activa.desglose.mora} />
               </Dato>
             ) : null}
-            {esPositivo(vista.resultado.sobrante) ? (
+            {esPositivo(activa.resultado.sobrante) ? (
               <Dato etiqueta="Le queda a favor">
-                <Monto valor={vista.resultado.sobrante} />
+                <Monto valor={activa.resultado.sobrante} />
               </Dato>
             ) : null}
           </Tarjeta>
@@ -284,7 +404,7 @@ export default function PantallaCobrar() {
         icono="checkmark-circle"
         onPress={confirmar}
         cargando={guardando}
-        deshabilitado={!vista}
+        deshabilitado={!activa}
       />
 
       <Boton
