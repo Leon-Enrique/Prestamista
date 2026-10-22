@@ -337,7 +337,7 @@ export async function comportamientoDeCliente(
             COUNT(*) AS prestamos,
             SUM(CASE WHEN prestamo_origen_id IS NOT NULL THEN 1 ELSE 0 END) AS refinanciaciones
        FROM prestamos
-      WHERE cliente_id = ?
+      WHERE cliente_id = ? AND estado != 'anulado'
       GROUP BY moneda`,
     clienteId,
   );
@@ -594,7 +594,7 @@ export async function actividadReciente(db: EjecutorSQL, limite = 6): Promise<Ac
        UNION ALL
        SELECT 'prestamo', p.id, p.fecha_desembolso, p.capital_centavos, p.moneda, c.nombre, p.creado_en
          FROM prestamos p JOIN clientes c ON c.id = p.cliente_id
-        WHERE p.prestamo_origen_id IS NULL
+        WHERE p.prestamo_origen_id IS NULL AND p.estado != 'anulado'
      )
      ORDER BY fecha DESC, creado_en DESC
      LIMIT ?`,

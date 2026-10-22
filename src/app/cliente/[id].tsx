@@ -170,8 +170,9 @@ export default function PantallaCliente() {
         <Seccion titulo="Préstamos">
           {prestamos.map((prestamo) => {
             const perdido = prestamo.estado === 'incobrable';
-            const atrasado = !perdido && esPositivo(prestamo.vencido);
-            const debe = !perdido && esPositivo(prestamo.saldo);
+            const anulado = prestamo.estado === 'anulado';
+            const atrasado = !perdido && !anulado && esPositivo(prestamo.vencido);
+            const debe = !perdido && !anulado && esPositivo(prestamo.saldo);
             return (
               <Tarjeta
                 key={prestamo.prestamoId}
@@ -193,6 +194,8 @@ export default function PantallaCliente() {
                   </Texto>
                   {perdido ? (
                     <Insignia texto="Perdido" color={tema.vencido} fondo={tema.vencidoSuave} />
+                  ) : anulado ? (
+                    <Insignia texto="Anulado" color={tema.textSecondary} fondo={tema.neutroSuave} />
                   ) : !debe ? (
                     <Insignia texto="Pagado" color={tema.alDia} fondo={tema.alDiaSuave} />
                   ) : atrasado ? (

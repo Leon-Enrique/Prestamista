@@ -53,6 +53,7 @@ import { ahora, formatearDiaCorto, hoy } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
 import { condonar } from '@/servicios/condonar';
+import { anularPrestamo } from '@/servicios/anular-prestamo';
 import { darPorPerdido, reactivarPrestamo } from '@/servicios/perder';
 import { revertirPago } from '@/servicios/revertir';
 
@@ -89,6 +90,7 @@ export default function PantallaPrestamo() {
 
   const [anulando, setAnulando] = useState<number | null>(null);
   const [perdiendo, setPerdiendo] = useState(false);
+  const [anulandoPrestamo, setAnulandoPrestamo] = useState(false);
   const [perdonando, setPerdonando] = useState<number | null>(null);
   const [verPerdonables, setVerPerdonables] = useState(false);
   const [motivo, setMotivo] = useState('');
@@ -99,6 +101,7 @@ export default function PantallaPrestamo() {
   const cerrarFormularios = () => {
     setAnulando(null);
     setPerdiendo(false);
+    setAnulandoPrestamo(false);
     setPerdonando(null);
     setMotivo('');
   };
@@ -113,6 +116,26 @@ export default function PantallaPrestamo() {
       refrescar();
       ficha.recargar();
       Alert.alert('Perdonado', formatear(resultado.condonado));
+    } catch (problema) {
+      Alert.alert('No se pudo', problema instanceof Error ? problema.message : String(problema));
+    } finally {
+      setTrabajando(false);
+    }
+  };
+
+  const anularTodo = async () => {
+    setTrabajando(true);
+    try {
+      const { devueltoACaja } = await enTransaccion(db, () =>
+        anularPrestamo(db, { prestamoId, motivo, fecha: dia, ahora: ahora() }),
+      );
+      cerrarFormularios();
+      refrescar();
+      ficha.recargar();
+      Alert.alert(
+        'Préstamo anulado',
+        devueltoACaja ? `Volvieron ${formatear(devueltoACaja)} a la caja.` : '',
+      );
     } catch (problema) {
       Alert.alert('No se pudo', problema instanceof Error ? problema.message : String(problema));
     } finally {
@@ -238,6 +261,8 @@ export default function PantallaPrestamo() {
         </View>
         {activo ? null : perdido ? (
             <Insignia texto="Perdido" color={tema.vencido} fondo={tema.vencidoSuave} />
+          ) : prestamo.estado === 'anulado' ? (
+            <Insignia texto="Anulado" color={tema.textSecondary} fondo={tema.neutroSuave} />
           ) : (
             <Insignia
               texto={prestamo.estado === 'refinanciado' ? 'Refinanciado' : 'Pagado'}
@@ -512,7 +537,49 @@ export default function PantallaPrestamo() {
         ) : null}
       </Seccion>
 
-      {activo && !perdiendo ? (
+      {activo && !anulandoPrestamo && !perdiendo && cobros.every((c) => c.anulado) ? (
+        <Boton
+          titulo="Anular préstamo"
+          icono="arrow-undo-outline"
+          variante="secundario"
+          onPress={() => {
+            cerrarFormularios();
+            setAnulandoPrestamo(true);
+          }}
+        />
+      ) : null}
+
+      {anulandoPrestamo ? (
+        <Tarjeta acento={tema.vencido}>
+          <Dato etiqueta="Vuelve a la caja">
+            <Monto valor={condiciones.capital} variante="subtitulo" />
+          </Dato>
+          <Campo
+            etiqueta="¿Por qué?"
+            valor={motivo}
+            onChange={setMotivo}
+            placeholder="Se arrepintió y devolvió la plata"
+            autoFocus
+          />
+          <Fila>
+            <Boton
+              titulo="Cancelar"
+              variante="secundario"
+              onPress={cerrarFormularios}
+              style={{ flex: 1 }}
+            />
+            <Boton
+              titulo="Anular"
+              variante="peligro"
+              cargando={trabajando}
+              onPress={() => void anularTodo()}
+              style={{ flex: 1 }}
+            />
+          </Fila>
+        </Tarjeta>
+      ) : null}
+
+      {activo && !perdiendo && !anulandoPrestamo ? (
         <Boton
           titulo="Dar por perdido"
           icono="close-circle-outline"

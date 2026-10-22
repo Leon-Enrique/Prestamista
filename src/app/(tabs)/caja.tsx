@@ -125,10 +125,14 @@ export default function PantallaCaja() {
           <Tarjeta>
             {lista.map((movimiento) => {
               const entra = !esNegativo(movimiento.monto);
-              const tipo = TIPO[movimiento.tipo] ?? {
-                etiqueta: movimiento.tipo,
-                icono: 'swap-vertical' as const,
-              };
+              // Un "desembolso" que entra es la devolución de un préstamo anulado.
+              const tipo =
+                movimiento.tipo === 'desembolso' && entra
+                  ? { etiqueta: 'Préstamo anulado', icono: 'arrow-undo' as const }
+                  : (TIPO[movimiento.tipo] ?? {
+                      etiqueta: movimiento.tipo,
+                      icono: 'swap-vertical' as const,
+                    });
               return (
                 <FilaActividad
                   key={movimiento.id}
