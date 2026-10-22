@@ -10,8 +10,10 @@ import { crearBaseDePrueba, type BaseDePrueba } from '../datos/baseDePrueba';
 import type { EjecutorSQL } from '../datos/ejecutor';
 import { crearCliente } from '../datos/repositorios/clientes';
 import { obligacionesDePrestamo } from '../datos/repositorios/obligaciones';
+import { obtenerPrestamo } from '../datos/repositorios/prestamos';
 import { verificar } from '../datos/verificacion';
 import { resumenDeuda } from '../dominio/obligaciones';
+import { proximoPago } from '../dominio/proximo-pago';
 import {
   REGLAS_MORA_POR_DEFECTO,
   REGLAS_SIN_PENALIZACION,
@@ -405,5 +407,51 @@ describe('cobro con el reparto elegido', () => {
     const despues = resumenDeuda(await obligacionesDePrestamo(db, prestamoId), 'BOB', dia('2026-11-09'));
     expect(formatear(despues.total)).toBe(formatear(antes.total));
     expect((await verificar(db)).cuadra).toBe(true);
+  });
+});
+
+describe('próximo pago', () => {
+  it('paga como puede: el próximo interés es el 10% del capital que debe hoy', async () => {
+    const { prestamoId } = await desembolsar(db, {
+      clienteId,
+      condiciones: { ...condiciones('solo_interes'), vencimientoCapital: null },
+      reglasMora: REGLAS_SIN_PENALIZACION,
+      ahora: AHORA,
+    });
+    const ver = async (hoy: string) => {
+      const prestamo = (await obtenerPrestamo(db, prestamoId))!;
+      return proximoPago(prestamo.condiciones, await obligacionesDePrestamo(db, prestamoId), dia(hoy));
+    };
+
+    const antes = (await ver('2026-10-20'))!;
+    expect(antes.fecha).toBe('2026-11-09');
+    expect(formatear(antes.interes)).toBe('Bs 200,00');
+
+    // Paga el interés del mes y 1.000 de capital: el próximo interés baja a 100.
+    await devengar(db, { hoy: dia('2026-11-09'), ahora: AHORA });
+    await cobrar(db, {
+      prestamoId,
+      monto: desdeUnidades(1200, 'BOB'),
+      fecha: dia('2026-11-09'),
+      medio: 'efectivo',
+      ahora: AHORA,
+    });
+    const despues = (await ver('2026-11-09'))!;
+    expect(despues.fecha).toBe('2026-12-09');
+    expect(formatear(despues.interes)).toBe('Bs 100,00');
+  });
+
+  it('con cuotas: la próxima cuota sin pagar, con su interés y su capital', async () => {
+    const { prestamoId } = await desembolsar(db, {
+      clienteId,
+      condiciones: condiciones('interes_flat'),
+      reglasMora: REGLAS_SIN_PENALIZACION,
+      ahora: AHORA,
+    });
+    const prestamo = (await obtenerPrestamo(db, prestamoId))!;
+    const p = proximoPago(prestamo.condiciones, await obligacionesDePrestamo(db, prestamoId), dia('2026-10-20'))!;
+    expect(p.fecha).toBe('2026-11-09');
+    expect(formatear(p.interes)).toBe('Bs 200,00');
+    expect(formatear(p.total)).toBe('Bs 866,66');
   });
 });

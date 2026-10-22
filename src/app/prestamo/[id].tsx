@@ -38,6 +38,7 @@ import { obligacionesDePrestamo } from '@/datos/repositorios/obligaciones';
 import { obtenerPrestamo } from '@/datos/repositorios/prestamos';
 import { aNumeroDeWhatsApp, mensajeDeRecordatorio } from '@/dominio/mensajes';
 import { resumenDeuda, saldoObligacion } from '@/dominio/obligaciones';
+import { proximoPago } from '@/dominio/proximo-pago';
 import { ETIQUETA_MODALIDAD } from '@/dominio/tipos';
 import { enviarPorWhatsApp } from '@/nucleo/compartir';
 import {
@@ -190,6 +191,7 @@ export default function PantallaPrestamo() {
   const deuda = resumenDeuda(obligaciones, moneda, dia);
   const activo = prestamo.estado === 'activo' && esPositivo(deuda.total);
   const perdido = prestamo.estado === 'incobrable';
+  const proximo = proximoPago(condiciones, obligaciones, dia);
 
   // Lo que se puede perdonar: intereses y penalizaciones abiertos. El capital no se perdona:
   // eso es dar el préstamo por perdido.
@@ -275,6 +277,25 @@ export default function PantallaPrestamo() {
           <Monto valor={deuda.capital} />
         </Dato>
       </TarjetaDestacada>
+
+      {activo && proximo ? (
+        <Tarjeta>
+          <CuadroIcono
+            icono="calendar"
+            color={tema.primario}
+            etiqueta={`Próximo pago · ${formatearDiaCorto(proximo.fecha)}`}
+            valor={formatear(proximo.total)}
+          />
+          <Dato etiqueta="Interés">
+            <Monto valor={proximo.interes} color={tema.alDia} />
+          </Dato>
+          {esPositivo(proximo.capital) ? (
+            <Dato etiqueta="Capital">
+              <Monto valor={proximo.capital} />
+            </Dato>
+          ) : null}
+        </Tarjeta>
+      ) : null}
 
       <Tarjeta>
         <Fila>
