@@ -8,7 +8,7 @@
 
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 
 import { textoReparto } from '@/components/desglose-de-cobro';
 import {
@@ -34,16 +34,18 @@ import {
   perdidas,
   prestamosDeCliente,
 } from '@/datos/consultas';
+import { enTransaccion } from '@/datos/base';
 import { obtenerCliente } from '@/datos/repositorios/clientes';
 import { ETIQUETA_MODALIDAD } from '@/dominio/tipos';
 import { cero, esPositivo, formatear, sumar } from '@/nucleo/dinero';
-import { formatearDiaCorto, hoy } from '@/nucleo/fechas';
+import { ahora, formatearDiaCorto, hoy } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
+import { eliminarCliente } from '@/servicios/eliminar-cliente';
 
 export default function PantallaCliente() {
   const tema = useTheme();
-  const { refrescar } = useBase();
+  const { db, refrescar } = useBase();
   const { id } = useLocalSearchParams<{ id: string }>();
   const clienteId = Number(id);
   const dia = hoy();
@@ -227,6 +229,35 @@ export default function PantallaCliente() {
           </Tarjeta>
         </Seccion>
       ) : null}
+
+      <Boton
+        titulo="Eliminar cliente"
+        icono="trash-outline"
+        variante="secundario"
+        onPress={() =>
+          Alert.alert(`¿Eliminar a ${cliente.nombre}?`, 'Deja de aparecer en la lista de clientes.', [
+            { text: 'Cancelar', style: 'cancel' },
+            {
+              text: 'Eliminar',
+              style: 'destructive',
+              onPress: async () => {
+                try {
+                  await enTransaccion(db, () =>
+                    eliminarCliente(db, { clienteId, hoy: dia, ahora: ahora() }),
+                  );
+                  refrescar();
+                  router.back();
+                } catch (problema) {
+                  Alert.alert(
+                    'No se puede eliminar',
+                    problema instanceof Error ? problema.message : String(problema),
+                  );
+                }
+              },
+            },
+          ])
+        }
+      />
     </Pantalla>
   );
 }
