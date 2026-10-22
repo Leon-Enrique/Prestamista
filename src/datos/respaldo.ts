@@ -21,7 +21,7 @@ import * as SQLite from 'expo-sqlite';
 import { diasEntre, type Dia, type Instante } from '../nucleo/fechas';
 import { exportarCarteraACsv } from './cartera-csv';
 import type { Configuracion } from './repositorios/config';
-import { escribirConfiguracion } from './repositorios/config';
+import { CLAVE_ULTIMO_COMPARTIDO, escribirConfiguracion } from './repositorios/config';
 import { sinModoWal, validarContenido, type ValidacionRespaldo } from './restaurar';
 
 export const CARPETA_RESPALDOS = 'respaldos';
@@ -111,13 +111,35 @@ export async function tomarRespaldo(
  * Una copia que vive solo en el mismo celular **no es un respaldo**: se pierde junto con el
  * teléfono. Esta es la parte que de verdad protege la cartera.
  */
-export async function compartirRespaldo(respaldo: Respaldo): Promise<boolean> {
+export async function compartirRespaldo(
+  respaldo: Respaldo,
+  titulo = 'Guardar respaldo de la cartera',
+): Promise<boolean> {
   if (!(await Sharing.isAvailableAsync())) return false;
   await Sharing.shareAsync(respaldo.uri, {
     mimeType: 'application/octet-stream',
-    dialogTitle: 'Guardar respaldo de la cartera',
+    dialogTitle: titulo,
   });
   return true;
+}
+
+/**
+ * Toma un respaldo y abre el menú de Android para mandarlo afuera (Drive, WhatsApp). Si el
+ * menú se abrió, anota el día: es lo que mide el aviso semanal.
+ *
+ * Android no avisa si la persona eligió una app o canceló, así que "se abrió el menú" es lo
+ * más cerca que se puede llegar de "se guardó".
+ */
+export async function guardarCopiaAfuera(
+  db: SQLite.SQLiteDatabase,
+  params: { hoy: Dia; ahora: Instante; titulo?: string },
+): Promise<boolean> {
+  const respaldo = await tomarRespaldo(db, { ahora: params.ahora });
+  const compartido = await compartirRespaldo(respaldo, params.titulo);
+  if (compartido) {
+    await escribirConfiguracion(db, CLAVE_ULTIMO_COMPARTIDO, params.hoy, params.ahora);
+  }
+  return compartido;
 }
 
 /**

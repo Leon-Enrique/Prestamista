@@ -21,12 +21,15 @@ import {
   Texto,
   Opciones,
 } from '@/components/ui';
+import { BotonesGuardarCopia } from '@/components/guardar-copia';
 import {
+  diasSinGuardarAfueraDe,
   diasSinRespaldoParaAvisarDe,
   escribirConfiguracion,
   nombreUsuarioDe,
   leerConfiguracion,
   reglasMoraDe,
+  ultimaCopiaAfueraDe,
 } from '@/datos/repositorios/config';
 import {
   definirPin,
@@ -37,16 +40,13 @@ import {
   quitarPin,
 } from '@/datos/pin';
 import {
-  compartirRespaldo,
-  diasSinRespaldo,
   elegirArchivoDeRespaldo,
   exportarCartera,
   listarRespaldos,
   revisarRespaldo,
-  tomarRespaldo,
 } from '@/datos/respaldo';
 import { restaurarDesdeBytes } from '@/datos/restauracion';
-import { ahora, hoy } from '@/nucleo/fechas';
+import { ahora, formatearDiaCorto, hoy } from '@/nucleo/fechas';
 import { useBase, useConsulta } from '@/hooks/use-base';
 
 export default function PantallaAjustes() {
@@ -58,7 +58,7 @@ export default function PantallaAjustes() {
     return {
       configuracion,
       mora: reglasMoraDe(configuracion),
-      dias: diasSinRespaldo(configuracion, dia),
+      dias: diasSinGuardarAfueraDe(configuracion, dia),
       limite: diasSinRespaldoParaAvisarDe(configuracion),
       conPin: await hayPinDefinido(),
       conBiometria: await hayBiometria(),
@@ -83,15 +83,6 @@ export default function PantallaAjustes() {
       refrescar();
     }
   };
-
-  const respaldarYCompartir = () =>
-    conAviso('respaldar', async () => {
-      const respaldo = await tomarRespaldo(db, { ahora: ahora() });
-      const compartido = await compartirRespaldo(respaldo);
-      return compartido
-        ? null
-        : 'El respaldo quedó guardado en el celular, pero no se pudo abrir el menú para compartirlo.';
-    });
 
   const exportar = () =>
     conAviso('exportar', async () => {
@@ -149,24 +140,17 @@ export default function PantallaAjustes() {
       ) : null}
 
       <Seccion titulo="Respaldo">
-        {sinRespaldo ? (
+        {datos && ultimaCopiaAfueraDe(datos.configuracion) === null ? (
           <Aviso tono="peligro" icono="cloud-offline">
-            {datos.dias === null
-              ? 'Sin respaldo.'
-              : `Último respaldo hace ${datos.dias} días.`}
+            Nunca guardaste una copia
           </Aviso>
-        ) : (
-          <Aviso tono="bien" icono="shield-checkmark">
-            Último respaldo hace {datos?.dias ?? 0} {datos?.dias === 1 ? 'día' : 'días'}.
+        ) : datos ? (
+          <Aviso tono={sinRespaldo ? 'peligro' : 'bien'} icono={sinRespaldo ? 'cloud-offline' : 'shield-checkmark'}>
+            Última copia guardada: {formatearDiaCorto(ultimaCopiaAfueraDe(datos.configuracion)!)}
           </Aviso>
-        )}
+        ) : null}
 
-        <Boton
-          titulo="Respaldar y compartir"
-          icono="cloud-upload"
-          onPress={respaldarYCompartir}
-          cargando={trabajando === 'respaldar'}
-        />
+        <BotonesGuardarCopia alGuardar={estado.recargar} />
         <Boton
           titulo="Exportar la cartera en planilla"
           icono="document-text"

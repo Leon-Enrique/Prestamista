@@ -16,7 +16,7 @@ import {
   type ReglasMora,
 } from '../../dominio/tipos';
 import type { Moneda } from '../../nucleo/dinero';
-import type { Instante } from '../../nucleo/fechas';
+import { diasEntre, type Dia, type Instante } from '../../nucleo/fechas';
 import type { EjecutorSQL } from '../ejecutor';
 
 export type Configuracion = Readonly<Record<string, string>>;
@@ -132,4 +132,24 @@ export function nombreUsuarioDe(config: Configuracion): string {
 export function codigoPaisDe(config: Configuracion): string {
   const crudo = config.codigo_pais?.replace(/\D/g, '');
   return crudo && crudo.length > 0 ? crudo : '591';
+}
+
+/**
+ * El día en que se mandó una copia **fuera del celular** (Drive, WhatsApp). Es la que de
+ * verdad protege la cartera, y la que mide el aviso semanal de la Cartera. Los respaldos
+ * automáticos (antes de migrar o restaurar) no la tocan.
+ */
+export const CLAVE_ULTIMO_COMPARTIDO = 'ultimo_respaldo_compartido';
+
+/** Días desde la última copia mandada afuera. `null` si nunca se mandó ninguna. */
+export function diasSinGuardarAfueraDe(config: Configuracion, hoy: Dia): number | null {
+  const ultimo = config[CLAVE_ULTIMO_COMPARTIDO]?.trim();
+  if (!ultimo || !/^\d{4}-\d{2}-\d{2}$/.test(ultimo)) return null;
+  return Math.max(0, diasEntre(ultimo as Dia, hoy));
+}
+
+/** El día de la última copia mandada afuera, o `null`. */
+export function ultimaCopiaAfueraDe(config: Configuracion): Dia | null {
+  const ultimo = config[CLAVE_ULTIMO_COMPARTIDO]?.trim();
+  return ultimo && /^\d{4}-\d{2}-\d{2}$/.test(ultimo) ? (ultimo as Dia) : null;
 }

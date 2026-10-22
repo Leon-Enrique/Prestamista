@@ -40,11 +40,11 @@ import {
 } from '@/datos/consultas';
 import {
   codigoPaisDe,
+  diasSinGuardarAfueraDe,
   diasSinRespaldoParaAvisarDe,
   leerConfiguracion,
   nombreUsuarioDe,
 } from '@/datos/repositorios/config';
-import { diasSinRespaldo } from '@/datos/respaldo';
 import { aNumeroDeWhatsApp, mensajeDeRecordatorio } from '@/dominio/mensajes';
 import { ETIQUETA_MODALIDAD } from '@/dominio/tipos';
 import { enviarPorWhatsApp } from '@/nucleo/compartir';
@@ -61,6 +61,7 @@ import { armarDia, formatearDiaCorto, hoy, sumarDias, type Dia } from '@/nucleo/
 import { useBase, useConsulta } from '@/hooks/use-base';
 import { useTheme } from '@/hooks/use-theme';
 import { agendaDeCobros } from '@/servicios/agenda';
+import { BotonesGuardarCopia } from '@/components/guardar-copia';
 
 function saludo(): string {
   const hora = new Date().getHours();
@@ -90,7 +91,7 @@ export default function PantallaCartera() {
   const avisos = useConsulta(async (db) => {
     const configuracion = await leerConfiguracion(db);
     return {
-      dias: diasSinRespaldo(configuracion, dia),
+      dias: diasSinGuardarAfueraDe(configuracion, dia),
       limite: diasSinRespaldoParaAvisarDe(configuracion),
       codigoPais: codigoPaisDe(configuracion),
       nombre: nombreUsuarioDe(configuracion),
@@ -172,9 +173,17 @@ export default function PantallaCartera() {
       ) : null}
 
       {avisos.datos && (avisos.datos.dias === null || avisos.datos.dias >= avisos.datos.limite) ? (
-        <Aviso tono="peligro" icono="cloud-offline">
-          {avisos.datos.dias === null ? 'Sin respaldo' : `${avisos.datos.dias} días sin respaldo`}
-        </Aviso>
+        <TarjetaDestacada>
+          <Texto variante="etiqueta" color={tema.vencido}>
+            Copia de seguridad
+          </Texto>
+          <Texto variante="subtitulo">
+            {avisos.datos.dias === null
+              ? 'Todavía no guardaste ninguna copia'
+              : `Hace ${avisos.datos.dias} días sin guardar una copia`}
+          </Texto>
+          <BotonesGuardarCopia alGuardar={avisos.recargar} />
+        </TarjetaDestacada>
       ) : null}
 
       {resumenes.map((r) => (
