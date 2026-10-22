@@ -100,7 +100,6 @@ export default function PantallaNuevoPrestamo() {
   const [modalidad, setModalidad] = useState<Modalidad>('solo_interes');
   const [frecuencia, setFrecuencia] = useState<Frecuencia>('mensual');
   const [plazoTexto, setPlazoTexto] = useState('6');
-  const [capitalConFecha, setCapitalConFecha] = useState(true);
   // La fecha de entrega arranca en hoy; se cambia para cargar préstamos ya entregados.
   const [entrega, setEntrega] = useState<Dia>(hoyDia);
   // Por defecto no se cobra penalización: el usuario la activa préstamo por préstamo.
@@ -113,9 +112,9 @@ export default function PantallaNuevoPrestamo() {
   const esAbierto = modalidad === 'solo_interes';
   // "10% del total" solo tiene sentido con interés sobre lo prestado.
   const permiteTasaTotal = modalidad === 'interes_flat';
-  const sinFecha = esAbierto && !capitalConFecha;
-  // Sin fecha de capital no hay plazo que pedir: la proyección muestra un solo período.
-  const plazo = sinFecha ? 1 : Number(plazoTexto);
+  // "Paga como puede" no tiene plazo: el capital no tiene fecha y la proyección muestra un
+  // solo período, para ver el interés.
+  const plazo = esAbierto ? 1 : Number(plazoTexto);
 
   const dia = entrega;
 
@@ -139,7 +138,7 @@ export default function PantallaNuevoPrestamo() {
         frecuencia,
         cantidadPeriodos: esAbierto ? null : plazo,
         fechaDesembolso: dia,
-        vencimientoCapital: !esAbierto || capitalConFecha ? ultimoVencimiento : null,
+        vencimientoCapital: esAbierto ? null : ultimoVencimiento,
       };
     } catch {
       return null;
@@ -154,7 +153,6 @@ export default function PantallaNuevoPrestamo() {
     plazo,
     dia,
     esAbierto,
-    capitalConFecha,
   ]);
 
   const vista = useMemo(() => {
@@ -311,30 +309,14 @@ export default function PantallaNuevoPrestamo() {
                 { valor: 'mensual', titulo: 'Mes' },
               ]}
             />
-            {sinFecha ? null : (
+            {esAbierto ? null : (
               <Campo
-                etiqueta={
-                  esAbierto
-                    ? `Devuelve el capital en (${NOMBRE_FRECUENCIA[frecuencia]})`
-                    : `Cuotas`
-                }
+                etiqueta={`Cuotas (${NOMBRE_FRECUENCIA[frecuencia]})`}
                 valor={plazoTexto}
                 onChange={(valor) => setPlazoTexto(valor.replace(/\D/g, ''))}
                 teclado="numeric"
               />
             )}
-
-            {esAbierto ? (
-              <Opciones
-                etiqueta="Fecha para el capital"
-                valor={capitalConFecha ? 'con' : 'sin'}
-                onChange={(valor) => setCapitalConFecha(valor === 'con')}
-                opciones={[
-                  { valor: 'con', titulo: 'Con fecha' },
-                  { valor: 'sin', titulo: 'Sin fecha' },
-                ]}
-              />
-            ) : null}
           </Seccion>
 
           {vista ? (
@@ -348,23 +330,6 @@ export default function PantallaNuevoPrestamo() {
                   <Dato etiqueta="Capital">
                     <Monto valor={condiciones!.capital} />
                   </Dato>
-                  {sinFecha ? null : (
-                    <>
-                      <Dato etiqueta={`Ganás en ${plazo} ${NOMBRE_FRECUENCIA[frecuencia]}`}>
-                        <Monto valor={vista.resumen.totalInteres} color={tema.alDia} />
-                      </Dato>
-                      <Dato etiqueta="Te devuelve">
-                        <Monto valor={vista.resumen.totalAPagar} variante="subtitulo" />
-                      </Dato>
-                    </>
-                  )}
-                  {capitalConFecha ? (
-                    <Dato etiqueta="Capital vence">
-                      <Texto>
-                        {formatearDiaCorto(vista.lineas[vista.lineas.length - 1].vencimiento)}
-                      </Texto>
-                    </Dato>
-                  ) : null}
                 </>
               ) : (
                 <>

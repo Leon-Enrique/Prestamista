@@ -62,7 +62,6 @@ import {
 } from '@/nucleo/dinero';
 import {
   ahora,
-  formatearDiaCorto,
   hoy,
   vencimientoDePeriodo,
   type Frecuencia,
@@ -197,7 +196,7 @@ function Formulario({ datos }: { datos: DatosRefinanciacion }) {
         frecuencia,
         cantidadPeriodos: esAbierto ? null : plazo,
         fechaDesembolso: dia,
-        vencimientoCapital: vencimientoDePeriodo(dia, frecuencia, plazo),
+        vencimientoCapital: esAbierto ? null : vencimientoDePeriodo(dia, frecuencia, plazo),
       };
     } catch {
       return null;
@@ -332,12 +331,14 @@ function Formulario({ datos }: { datos: DatosRefinanciacion }) {
             { valor: 'mensual', titulo: 'Mensual' },
           ]}
         />
-        <Campo
-          etiqueta={esAbierto ? `Plazo (${NOMBRE_FRECUENCIA[frecuencia]})` : 'Cantidad de cuotas'}
-          valor={plazoTexto}
-          onChange={(valor) => setPlazoTexto(valor.replace(/\D/g, ''))}
-          teclado="numeric"
-        />
+        {esAbierto ? null : (
+          <Campo
+            etiqueta={`Cuotas (${NOMBRE_FRECUENCIA[frecuencia]})`}
+            valor={plazoTexto}
+            onChange={(valor) => setPlazoTexto(valor.replace(/\D/g, ''))}
+            teclado="numeric"
+          />
+        )}
       </Seccion>
 
       {condiciones && diferencia ? (
@@ -375,11 +376,6 @@ function Formulario({ datos }: { datos: DatosRefinanciacion }) {
               <>
                 <Dato etiqueta={`Interés por ${NOMBRE_FRECUENCIA[frecuencia].slice(0, -1)}`}>
                   <Monto valor={vista.lineas[0].interes} variante="subtitulo" />
-                </Dato>
-                <Dato etiqueta="Capital vence">
-                  <Texto>
-                    {formatearDiaCorto(vista.lineas[vista.lineas.length - 1].vencimiento)}
-                  </Texto>
                 </Dato>
               </>
             ) : (
